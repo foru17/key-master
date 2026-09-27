@@ -280,3 +280,27 @@ test("real admin workflows, rollback, bilingual themes and keyboard", async ({ p
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Welcome to key-master" })).toBeVisible();
 });
+
+for (const theme of ["light", "dark"] as const)
+  test(`sidebar covers the viewport while scrolling ${theme}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 600 });
+    await page.addInitScript((value) => localStorage.setItem("km_theme", value), theme);
+    await login(page);
+    const sidebar = page.locator(".sidebar");
+    await expect(sidebar).toHaveCSS("position", "sticky");
+    await expect(sidebar).toHaveCSS(
+      "background-color",
+      theme === "light" ? "rgb(239, 241, 237)" : "rgb(27, 34, 29)",
+    );
+    for (const end of [false, true]) {
+      await page.evaluate((end) => window.scrollTo(0, end ? document.body.scrollHeight : 0), end);
+      expect(await page.evaluate(() => document.documentElement.scrollHeight > innerHeight)).toBe(
+        true,
+      );
+      if (end) expect(await page.evaluate(() => scrollY)).toBeGreaterThan(0);
+      const box = await sidebar.boundingBox();
+      expect(box?.y).toBe(0);
+      expect(box?.height).toBe(600);
+      await expect(page.locator(".sidebar-footer")).toBeInViewport();
+    }
+  });

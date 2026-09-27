@@ -1,0 +1,33 @@
+[
+  {
+    "id": "sidebar-height",
+    "task": "Keep the desktop sidebar sticky and viewport-height on long pages",
+    "verification": "Playwright scroll assertions in light and dark themes",
+    "passes": true,
+    "evidence": "Recursive build exit 0; Playwright sidebar scroll cases: 2 passed (light/dark, 1440 x 600)."
+  },
+  {
+    "id": "brand",
+    "task": "Remove the decorative slash from the sidebar brand",
+    "verification": "Playwright desktop and mobile brand assertions",
+    "passes": false
+  },
+  {
+    "id": "time",
+    "task": "Localize admin timestamps and configure the denied notice timezone",
+    "verification": "Vitest timezone cases and Playwright browser timezone/language assertions",
+    "passes": false
+  },
+  {
+    "id": "tokens",
+    "task": "Import hashed machine tokens at startup and associate nginx audit token IDs",
+    "verification": "Vitest validation, startup upsert, authorization, admin visibility and ingest cases",
+    "passes": false
+  },
+  {
+    "id": "acceptance",
+    "task": "Run the full acceptance chain, inspect fresh screenshots and scan identifiers",
+    "verification": "Recursive tests/build, lint, UI tests, eight reviewed screenshots and zero-match identifier scan",
+    "passes": false
+  }
+]
