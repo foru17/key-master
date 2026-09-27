@@ -4,7 +4,7 @@
     "task": "Keep the desktop sidebar sticky and viewport-height on long pages",
     "verification": "Playwright scroll assertions in light and dark themes",
     "passes": true,
-    "evidence": "Recursive build exit 0; Playwright sidebar scroll cases: 2 passed (light/dark, 1440 x 600)."
+    "evidence": "Final Playwright light/dark scroll cases passed; agent-browser scrolled 402 px with sidebar top 0 and height 900; full-page screenshots retain the sidebar background below the viewport."
   },
   {
     "id": "brand",
@@ -31,6 +31,7 @@
     "id": "acceptance",
     "task": "Run the full acceptance chain, inspect fresh screenshots and scan identifiers",
     "verification": "Recursive tests/build, lint, UI tests, eight reviewed screenshots and zero-match identifier scan",
-    "passes": false
+    "passes": true,
+    "evidence": "Exact test/build/lint/UI chain exit 0: 333 unit tests + 10 browser tests (15.8s). Eight requested screenshots individually reviewed against 768eab2; zero contrast/overflow failures. Requested recursive identifier scan: no output, exit 1. curl: health 200, browser denial 403."
   }
 ]

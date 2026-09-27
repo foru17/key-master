@@ -4,7 +4,8 @@ Follow AGENTS.md and SPEC.md. Visual contract: docs/DESIGN.md. Product context: 
 
 ## UI 基准
 
-Baseline: `feat/phase-one`, the static admin placeholder and server denial page.
+Current comparison baseline: `768eab2` on `feat/admin`, with its committed Overview and denied screenshots.
+Original historical baseline: `feat/phase-one`, the static admin placeholder and server denial page.
 Local baseline captures: `.ui-acceptance/2026-09-27/{admin,denied}-{desktop,mobile,dark}.png`.
-Phase-two candidate: `docs/screenshots/`; comparison and behavior evidence are recorded in `docs/ACCEPTANCE.md`.
+Admin-fixes candidate: `docs/screenshots/`; comparison and behavior evidence are recorded in `docs/ACCEPTANCE.md`.
 There is no configured production deployment or remote baseline URL.

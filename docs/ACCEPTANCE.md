@@ -1,3 +1,73 @@
+# Admin fixes acceptance — 2026-09-27
+
+Verified on `feat/admin`; baseline `768eab2`. Changes are committed locally with Codex co-author signatures. No push performed.
+
+| Check | Actual result |
+| --- | --- |
+| `pnpm -r test && pnpm -r build && pnpm lint && pnpm test:ui` | Exit 0 |
+| Unit tests | 175 core + 158 server = 333 passed; admin strict typecheck passed |
+| Builds | Core, server and admin passed |
+| Lint | Passed; zero errors/warnings; one pre-existing Biome configuration deprecation info |
+| Browser tests | 10 passed (15.8s), including bright/dark long-page scrolling, desktop/mobile brand, two browser timezones and en/zh formatting |
+| Startup/restart smoke | Real production entrypoint: health 200, imported token 200, then 403 after revocation and restart; one token row; lifecycle timestamps preserved |
+| Token coverage | Strict hash-only config, duplicate IDs, expiry formats/bounds, scope, optional pepper, idempotent upsert, preserved revocation, API visibility without hash leakage, nginx token correlation |
+| Time coverage | Default UTC, IANA validation, language, ISO hover values, epoch zero, date rollover, DST and legacy persisted settings |
+| Requested recursive identifier scan | No output; exit 1 (no matches), including ignored files; generated logs normalize the workspace path |
+| curl preview | `/healthz` 200; browser `/example-rules` 403 |
+| Screenshot review | All eight requested screenshots opened individually and compared with the baseline; no missing features or layout regressions |
+
+UI gate: **VERDICT: PASS**. Detailed layout, contrast, behavior and baseline evidence is in [ui-acceptance.md](ui-acceptance.md).
+
+The sidebar uses sticky positioning and `100dvh`; the surrounding sidebar canvas also covers the full document in long-page captures. The brand slash was decorative and is removed. Admin timestamps follow the browser zone and UI language; server denial pages and their previews label `notice.timezone` (default UTC). Config token upserts preserve revocation, creation and usage history. nginx authorization remains independent of SQLite revocation/expiry, as documented in [nginx.md](nginx.md).
+
+Screenshots:
+
+- Overview: [1440 light](screenshots/overview-1440-light.png), [1440 dark](screenshots/overview-1440-dark.png), [390 light](screenshots/overview-390-light.png), [390 dark](screenshots/overview-390-dark.png).
+- Denied: [1440 light](screenshots/denied-1440-light.png), [1440 dark](screenshots/denied-1440-dark.png), [390 light](screenshots/denied-390-light.png), [390 dark](screenshots/denied-390-dark.png).
+
+## Changed files for this follow-up
+
+- `CLAUDE.md`
+- `README.md`
+- `SPEC.md`
+- `apps/admin/src/components.tsx`
+- `apps/admin/src/main.tsx`
+- `apps/admin/src/manage.tsx`
+- `apps/admin/src/overview.tsx`
+- `apps/admin/src/requests.tsx`
+- `apps/admin/src/settings.tsx`
+- `apps/admin/src/style.css`
+- `apps/admin/src/types.ts`
+- `apps/server/src/admin.test.ts`
+- `apps/server/src/admin.ts`
+- `apps/server/src/app.ts`
+- `apps/server/src/config.ts`
+- `apps/server/src/db.ts`
+- `apps/server/src/index.ts`
+- `apps/server/src/ingest.ts`
+- `apps/server/src/server.test.ts`
+- `apps/server/src/tokens.test.ts`
+- `config.example.yaml`
+- `docs/ACCEPTANCE.md`
+- `docs/admin-fixes.json`
+- `docs/nginx.md`
+- `docs/screenshots/denied-1440-dark.png`
+- `docs/screenshots/denied-1440-light.png`
+- `docs/screenshots/denied-390-dark.png`
+- `docs/screenshots/denied-390-light.png`
+- `docs/screenshots/overview-1440-dark.png`
+- `docs/screenshots/overview-1440-light.png`
+- `docs/screenshots/overview-390-dark.png`
+- `docs/screenshots/overview-390-light.png`
+- `docs/ui-acceptance.md`
+- `packages/core/src/index.test.ts`
+- `packages/core/src/index.ts`
+- `packages/core/src/time.test.ts`
+- `packages/core/src/time.ts`
+- `tests/ui/admin.spec.ts`
+
+---
+
 # Phase-two acceptance
 
 Verified on 2026-09-27 on branch `feat/admin`, created from `feat/phase-one`. No push performed.
