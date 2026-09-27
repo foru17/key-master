@@ -196,6 +196,7 @@ code {
   display: flex;
   min-height: 100dvh;
   width: 100%;
+  background: var(--wash);
 }
 .sidebar {
   position: sticky;
@@ -280,6 +281,8 @@ code {
 .app-main {
   flex: 1;
   min-width: 0;
+  background: var(--paper);
+  box-shadow: -1px 0 var(--line);
 }
 .topbar {
   height: 70px;

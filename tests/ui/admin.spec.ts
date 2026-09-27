@@ -288,6 +288,10 @@ for (const theme of ["light", "dark"] as const)
     await login(page);
     const sidebar = page.locator(".sidebar");
     await expect(sidebar).toHaveCSS("position", "sticky");
+    await expect(page.locator("#root")).toHaveCSS(
+      "background-color",
+      theme === "light" ? "rgb(239, 241, 237)" : "rgb(27, 34, 29)",
+    );
     await expect(sidebar).toHaveCSS(
       "background-color",
       theme === "light" ? "rgb(239, 241, 237)" : "rgb(27, 34, 29)",
