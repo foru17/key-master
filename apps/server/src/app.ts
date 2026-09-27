@@ -50,6 +50,7 @@ export function createApp(options: {
       resourceSlug: string | null;
       tokenId: string | null;
       grantId: string | null;
+      allowlistId: string | null;
       pending: PendingRequest | null;
     };
   }>();
@@ -69,6 +70,7 @@ export function createApp(options: {
     c.set("resourceSlug", null);
     c.set("tokenId", null);
     c.set("grantId", null);
+    c.set("allowlistId", null);
     c.set("pending", null);
     await next();
     c.header("X-Request-Id", id);
@@ -121,6 +123,7 @@ export function createApp(options: {
           decision: c.get("decision"),
           tokenId: c.get("tokenId"),
           grantId: c.get("grantId"),
+          allowlistId: c.get("allowlistId"),
           status: c.res.status,
           bytes: body.length,
           latencyMs: Math.max(0, clock() - started),
@@ -221,6 +224,7 @@ export function createApp(options: {
       queryToken: c.req.query("k") ?? "",
       now,
       tokens: store.db.select().from(schema.tokens).all(),
+      allowlist: store.db.select().from(schema.allowlist).all(),
       grants: store.db.select().from(schema.grants).all(),
       blocks: store.db.select().from(schema.blocks).all(),
       internalCidrs: config.internal_cidrs,
@@ -233,6 +237,13 @@ export function createApp(options: {
     c.set("resourceSlug", resource?.slug ?? null);
     c.set("tokenId", result.tokenId ?? null);
     c.set("grantId", result.grantId ?? null);
+    c.set("allowlistId", result.allowlistId ?? null);
+    if (result.allowlistId)
+      store.db
+        .update(schema.allowlist)
+        .set({ lastMatchedAt: now })
+        .where(eq(schema.allowlist.id, result.allowlistId))
+        .run();
     if (result.notify && resource)
       c.set("pending", {
         requestId: c.get("requestId"),

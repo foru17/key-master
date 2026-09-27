@@ -35,6 +35,20 @@ export const grants = sqliteTable(
   },
   (t) => [index("grants_subject_idx").on(t.subject)],
 );
+export const allowlist = sqliteTable("allowlist", {
+  id: text().primaryKey(),
+  label: text().notNull(),
+  value: text().notNull(),
+  kind: text({ enum: ["ip", "cidr", "host"] }).notNull(),
+  scope: text({ mode: "json" }).$type<string[]>().notNull().default(["*"]),
+  source: text({ enum: ["config", "telegram", "admin", "command"] }).notNull(),
+  createdBy: text("created_by").notNull(),
+  createdAt: integer("created_at").notNull(),
+  revokedAt: integer("revoked_at"),
+  resolved: text({ mode: "json" }).$type<string[]>().notNull().default([]),
+  resolvedAt: integer("resolved_at"),
+  lastMatchedAt: integer("last_matched_at"),
+});
 export const requests = sqliteTable(
   "requests",
   {
@@ -51,6 +65,7 @@ export const requests = sqliteTable(
       enum: [
         "allow_token",
         "allow_grant",
+        "allow_allowlist",
         "allow_internal",
         "allow_public",
         "deny_pending",
@@ -61,6 +76,7 @@ export const requests = sqliteTable(
     }).notNull(),
     tokenId: text("token_id"),
     grantId: text("grant_id"),
+    allowlistId: text("allowlist_id"),
     status: integer().notNull(),
     bytes: integer().notNull(),
     latencyMs: integer("latency_ms").notNull(),
@@ -75,7 +91,7 @@ export const approvals = sqliteTable("approvals", {
     .references(() => requests.id),
   subject: text().notNull(),
   tgMessageId: integer("tg_message_id"),
-  action: text({ enum: ["allow", "deny", "device_token"] }).notNull(),
+  action: text({ enum: ["allow", "deny", "device_token", "always"] }).notNull(),
   actor: text().notNull(),
   durationS: integer("duration_s").notNull(),
   ts: integer().notNull(),

@@ -80,7 +80,8 @@
     "id": "allowlist-storage",
     "task": "Migration, config import, DNS refresh, request audit",
     "verification": "Server allowlist tests and build",
-    "passes": false
+    "passes": true,
+    "evidence": "Server Vitest 222 passed (21 allowlist tests); server TypeScript build exit 0; historical migration and append-only assertions passed"
   },
   {
     "id": "allowlist-actions",

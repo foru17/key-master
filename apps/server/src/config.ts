@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { validCidr, validTimeZone } from "@key-master/core";
+import { parseAllowlistValue, validCidr, validTimeZone } from "@key-master/core";
 import { parse } from "yaml";
 import { z } from "zod";
 
@@ -60,6 +60,38 @@ export const machineTokenSchema = z.strictObject({
     ])
     .optional(),
 });
+export const allowlistInput = z.strictObject({
+  value: z
+    .string()
+    .trim()
+    .max(253)
+    .refine(
+      (value) => parseAllowlistValue(value) !== null,
+      "Invalid IP, CIDR or hostname / IP、CIDR 或主机名无效",
+    ),
+  label: z.string().trim().min(1).max(200),
+  scope: z.array(z.string().regex(SCOPE_ITEM_PATTERN)).min(1).max(100).default(["*"]),
+});
+const allowlistEntries = z
+  .array(
+    allowlistInput.extend({
+      id: z
+        .string()
+        .min(1)
+        .max(50)
+        .regex(/^[A-Za-z0-9_-]+$/),
+    }),
+  )
+  .max(1000);
+const allowlistConfig = z
+  .union([
+    allowlistEntries.transform((entries) => ({ entries, resolve_interval_s: 300 })),
+    z.strictObject({
+      entries: allowlistEntries.default([]),
+      resolve_interval_s: z.number().int().min(60).max(86400).default(300),
+    }),
+  ])
+  .default({ entries: [], resolve_interval_s: 300 });
 export const configSchema = z
   .object({
     public_base_url: httpUrl.default("https://example.com"),
@@ -122,6 +154,7 @@ export const configSchema = z
         footer: "",
         not_found_body: "404 Not Found\n",
       }),
+    allowlist: allowlistConfig,
     tokens: z.array(machineTokenSchema).max(10000).default([]),
     resources: z.array(resourceSchema).max(10000).default([]),
     ingest: z.object({ nginx_log: z.string().optional() }).default({}),
@@ -139,6 +172,11 @@ export const configSchema = z
       .default({ provider: "off", online_url: "", mmdb_dir: "", cache_days: 7, timeout_ms: 2500 }),
   })
   .superRefine((config, ctx) => {
+    if (
+      new Set(config.allowlist.entries.map((entry) => entry.id)).size !==
+      config.allowlist.entries.length
+    )
+      ctx.addIssue({ code: "custom", path: ["allowlist"], message: "Duplicate allowlist id" });
     if (new Set(config.tokens.map((t) => t.id)).size !== config.tokens.length)
       ctx.addIssue({ code: "custom", path: ["tokens"], message: "Duplicate token id" });
     if (new Set(config.resources.map((r) => r.slug)).size !== config.resources.length)

@@ -1,5 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { serve } from "@hono/node-server";
+import { AllowlistResolver, syncAllowlist } from "./allowlist.js";
 import { createApp } from "./app.js";
 import { HttpTelegramApi, TelegramBot } from "./bot/telegram.js";
 import { loadConfig } from "./config.js";
@@ -12,6 +13,9 @@ mkdirSync(config.file_root, { recursive: true });
 const store = openStore(config.db_path);
 syncResources(store, config);
 syncTokens(store, config);
+syncAllowlist(store, config);
+const allowlistResolver = new AllowlistResolver(store, config.allowlist.resolve_interval_s);
+await allowlistResolver.start();
 const geo = new GeoService(store, config);
 const enabled =
   secrets.telegramToken !== "" &&
@@ -52,6 +56,7 @@ async function close() {
   if (ingest) clearInterval(ingest);
   await new Promise<void>((resolve) => server.close(() => resolve()));
   await polling?.done;
+  await allowlistResolver.stop();
   store.sqlite.close();
 }
 process.on("SIGINT", () => {
