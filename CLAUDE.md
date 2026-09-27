@@ -9,3 +9,6 @@ Original historical baseline: `feat/phase-one`, the static admin placeholder and
 Local baseline captures: `.ui-acceptance/2026-09-27/{admin,denied}-{desktop,mobile,dark}.png`.
 Admin-fixes candidate: `docs/screenshots/`; comparison and behavior evidence are recorded in `docs/ACCEPTANCE.md`.
 There is no configured production deployment or remote baseline URL.
+
+Allowlist candidate: `.ui-acceptance/2026-09-28/`, with immediate pre-change captures under `baseline/`
+(UI at `80f074d`). Verification and comparison: `docs/ALLOWLIST-ACCEPTANCE.md`.

@@ -904,6 +904,44 @@ input[type="checkbox"][role="switch"]:checked::before {
 .t-decisions {
   --cols: minmax(200px, 1.6fr) minmax(0, 0.8fr) max-content max-content minmax(0, 1fr) max-content;
 }
+.t-allowlist {
+  --cols: minmax(180px, 1.5fr) max-content minmax(120px, 1.2fr) minmax(80px, 0.7fr) max-content
+    max-content;
+}
+.request-actions {
+  flex-wrap: wrap;
+}
+.allowlist-section {
+  margin-bottom: 32px;
+}
+.allowlist-identity {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+.allowlist-identity strong {
+  font-weight: 500;
+}
+.allowlist-addresses {
+  overflow-wrap: anywhere;
+}
+.section-head .section-action {
+  margin-left: auto;
+}
+.section-description {
+  color: var(--fg-muted);
+  font-size: 13px;
+  margin: -4px 0 16px;
+}
+.t-pending .td.actions {
+  display: grid;
+  grid-template-columns: repeat(4, max-content);
+}
+.t-pending .always-action {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
 .t-grants {
   --cols: minmax(200px, 1.6fr) minmax(0, 0.8fr) minmax(0, 1fr) minmax(0, 0.9fr) max-content
     max-content;
@@ -2044,6 +2082,7 @@ input[type="checkbox"][role="switch"]:checked::before {
   }
   /* pending approvals: actions need the full width on a phone */
   .data-table.is-grid.t-pending > .tr > .td.actions {
+    display: flex;
     grid-column: 1 / -1;
     grid-row: auto;
     flex-wrap: wrap;

@@ -32,6 +32,7 @@ import type { Audit, Resource } from "./types";
 const decisions = [
   "allow_token",
   "allow_grant",
+  "allow_allowlist",
   "allow_internal",
   "allow_public",
   "deny_pending",
@@ -81,6 +82,7 @@ export function RequestDrawer({ id, onClose }: { id: string; onClose: () => void
   const toast = useToast();
   const query = useData<Audit>(`requests/${id}`);
   const [grant, setGrant] = useState(false);
+  const always = useAction("allowlist", "POST", () => toast(t("alwaysSaved")));
   const block = useAction("blocks", "POST", () => toast(t("saved")));
   const row = query.data;
   return (
@@ -108,6 +110,12 @@ export function RequestDrawer({ id, onClose }: { id: string; onClose: () => void
               [t("source"), row.source],
               [t("matchedToken"), row.tokenId ?? "—"],
               [t("matchedGrant"), row.grantId ?? "—"],
+              [
+                t("matchedAllowlist"),
+                row.allowlist
+                  ? `${row.allowlist.label} · ${row.allowlist.value} · ${row.allowlist.id}`
+                  : (row.allowlistId ?? "—"),
+              ],
             ].map(([label, value]) => (
               <div key={label}>
                 <dt>{label}</dt>
@@ -121,7 +129,13 @@ export function RequestDrawer({ id, onClose }: { id: string; onClose: () => void
           <ClientDetails client={row.client} ua={row.ua} />
           <h3>{t("headers")}</h3>
           <pre>{JSON.stringify(row.headers, null, 2)}</pre>
-          <div className="actions">
+          <div className="actions request-actions">
+            <Button
+              disabled={always.isPending}
+              onClick={() => always.mutate({ requestId: row.id })}
+            >
+              {t("alwaysAllowIp")}
+            </Button>
             <Button onClick={() => setGrant(true)}>
               {t("grantIp")}
               <ArrowUpRight size={14} />
@@ -133,6 +147,7 @@ export function RequestDrawer({ id, onClose }: { id: string; onClose: () => void
             />
           </div>
           <ErrorBox error={block.error} />
+          <ErrorBox error={always.error} />
           {grant && <GrantForm ip={row.ip} onClose={() => setGrant(false)} />}
         </>
       ) : (

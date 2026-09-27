@@ -74,6 +74,13 @@ export function ApprovalRow({
           label={t("deny")}
           onConfirm={() => action.mutate({ action: "deny" })}
         />
+        <Button
+          className="always-action"
+          disabled={action.isPending}
+          onClick={() => action.mutate({ action: "always" })}
+        >
+          {t("alwaysAllowIp")}
+        </Button>
       </div>
       {action.error && (
         <div className="td row-error">
@@ -130,7 +137,9 @@ function DecisionRow({ row }: { row: Decision }) {
         <Pill value={row.action} />
       </div>
       <div className="td" data-label={t("colDuration")}>
-        <span className="cell-mono">{formatDuration(row.durationS, i18n.language)}</span>
+        <span className="cell-mono">
+          {row.action === "always" ? t("permanent") : formatDuration(row.durationS, i18n.language)}
+        </span>
       </div>
       <div className="td" data-label={t("actor")}>
         <span className="cell-mono muted truncate" title={row.actor}>

@@ -58,6 +58,8 @@ export type Audit = {
   decision: string;
   tokenId: string | null;
   grantId: string | null;
+  allowlistId: string | null;
+  allowlist?: AllowlistEntry | null;
   status: number;
   bytes: number;
   latencyMs: number;
@@ -120,4 +122,17 @@ export type Overview = {
   pending: Pending[];
   clients: { label: string; count: number }[];
   ips: { label: string; count: number; ipInfo?: IpInfo | null }[];
+};
+
+export type AllowlistEntry = {
+  id: string;
+  label: string;
+  value: string;
+  kind: "ip" | "cidr" | "host";
+  scope: string[];
+  source: "config" | "telegram" | "admin" | "command";
+  resolved: string[];
+  resolvedAt: number | null;
+  lastMatchedAt: number | null;
+  revokedAt: number | null;
 };

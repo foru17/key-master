@@ -178,7 +178,11 @@ export function Pill({ value }: { value: string }) {
       ? value === "device_token"
         ? "info"
         : "pending"
-      : value.startsWith("allow") || value === "active" || value === "enabled"
+      : value.startsWith("allow_") ||
+          value === "allow" ||
+          value === "always" ||
+          value === "active" ||
+          value === "enabled"
         ? "allow"
         : value.startsWith("deny") || value === "revoked"
           ? "deny"

@@ -94,7 +94,8 @@
     "id": "allowlist-ui",
     "task": "Allowlist management and quick actions",
     "verification": "UI behavior, desktop/mobile/dark screenshots, baseline comparison",
-    "passes": false
+    "passes": true,
+    "evidence": "pnpm test:ui: 13 passed; admin build exit 0; docs/ALLOWLIST-ACCEPTANCE.md; .ui-acceptance/2026-09-28 screenshots and agent-browser evidence"
   },
   {
     "id": "allowlist-delivery",

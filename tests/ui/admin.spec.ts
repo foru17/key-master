@@ -22,6 +22,17 @@ async function login(page: Page) {
 async function checkLayout(page: Page) {
   await page.evaluate(() => document.fonts.ready);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const clippedActions = await page
+    .locator(".approval-item .td.actions > button, .request-actions > button")
+    .evaluateAll((buttons) =>
+      buttons
+        .filter((button) => {
+          const box = button.getBoundingClientRect();
+          return box.width > 0 && (box.left < 0 || box.right > innerWidth);
+        })
+        .map((button) => button.textContent),
+    );
+  expect(clippedActions).toEqual([]);
   const dialog = page.locator("dialog[open]");
   if (await dialog.count()) {
     const box = await dialog.last().boundingBox();
@@ -40,10 +51,11 @@ async function contrast(page: Page) {
       if (!ctx) return [0, 0, 0];
       ctx.fillStyle = s;
       ctx.fillRect(0, 0, 1, 1);
-      return Array.from(ctx.getImageData(0, 0, 1, 1).data).slice(0, 3);
+      return Array.from(ctx.getImageData(0, 0, 1, 1).data);
     };
     const lum = (rgb: number[]) =>
       rgb
+        .slice(0, 3)
         .map((n) => {
           const v = n / 255;
           return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
@@ -68,7 +80,7 @@ async function contrast(page: Page) {
       let background = "rgb(255, 255, 255)";
       while (parent) {
         const bg = getComputedStyle(parent).backgroundColor;
-        if (!bg.endsWith(", 0)") && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent") {
+        if ((parse(bg)[3] ?? 0) > 0) {
           background = bg;
           break;
         }
@@ -356,4 +368,165 @@ for (const timezoneId of ["Asia/Singapore", "America/New_York"])
     await page.getByRole("button", { name: "中", exact: true }).click();
     await expect(stamp).toHaveText(await expected("zh"));
     await context.close();
+  });
+
+for (const [width, theme] of [
+  [1440, "light"],
+  [390, "light"],
+  [1440, "dark"],
+] as const)
+  test(`allowlist workflow ${width} ${theme}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+    await page.emulateMedia({ colorScheme: theme });
+    await page.addInitScript((theme) => {
+      localStorage.setItem("km_theme", theme);
+      localStorage.setItem("km_language", "en");
+    }, theme);
+    await login(page);
+    const output = ".ui-acceptance/2026-09-28";
+    mkdirSync(output, { recursive: true });
+    const suffix = width === 390 ? "mobile" : theme === "dark" ? "dark" : "desktop";
+    const shot = async (name: string) => {
+      await checkLayout(page);
+      expect(await contrast(page)).toEqual([]);
+      await page.screenshot({
+        path: `${output}/${name}-${suffix}.png`,
+        fullPage: !(await page.locator("dialog[open]").count()),
+      });
+    };
+    await page.goto("/admin/grants");
+    await page.getByRole("button", { name: "Add network", exact: true }).click();
+    await page.getByLabel("IP, CIDR or hostname").fill("203.0.113.0/23");
+    await page.getByLabel("Label", { exact: true }).fill(`Example home ${suffix}`);
+    await page
+      .getByLabel("Scope (comma-separated paths or *)", { exact: true })
+      .fill("/example-feed");
+    await page.locator("dialog").getByRole("button", { name: "Save changes" }).click();
+    await expect(page.locator("dialog").getByText("Invalid input / 输入无效")).toBeVisible();
+    await page.getByLabel("IP, CIDR or hostname").fill("home.example.com");
+    await shot("allowlist-dialog");
+    await page.locator("dialog").getByRole("button", { name: "Save changes" }).click();
+    await expect(page.locator("dialog[open]")).toHaveCount(0);
+    const row = page.locator(".t-allowlist .tr").filter({ hasText: `Example home ${suffix}` });
+    await expect(row).toBeVisible();
+    await expect(row).toContainText("Hostname");
+    await expect(row).toContainText("/example-feed");
+    // DNS is tested with an injected resolver in server tests; seed its display snapshot here.
+    const db = new Database(".verification/ui.db");
+    db.prepare(
+      "UPDATE allowlist SET resolved = ?, resolved_at = ?, last_matched_at = ? WHERE label = ?",
+    ).run(
+      JSON.stringify(["203.0.113.7", "2001:db8:1:2:abcd:1234:5678:9abc"]),
+      Date.now(),
+      Date.now() - 60000,
+      `Example home ${suffix}`,
+    );
+    db.close();
+    await page.reload();
+    await expect(row).toContainText("2001:db8:1:2:abcd:1234:5678:9abc");
+    await shot("grants");
+    await row.getByRole("button", { name: "Remove", exact: true }).click();
+    await shot("allowlist-remove");
+    await page
+      .locator(":popover-open")
+      .getByRole("button", { name: "Cancel", exact: true })
+      .click();
+    await expect(row).toBeVisible();
+    await row.getByRole("button", { name: "Remove", exact: true }).click();
+    await page
+      .locator(":popover-open")
+      .getByRole("button", { name: "Confirm", exact: true })
+      .click();
+    await expect(row).toHaveCount(0);
+    await page.getByRole("button", { name: "中", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "长期白名单", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "新增网络", exact: true }).click();
+    await expect(page.getByLabel("IP、CIDR 或主机名")).toBeVisible();
+    await page.getByRole("button", { name: "取消", exact: true }).click();
+    await page.getByRole("button", { name: "EN", exact: true }).click();
+
+    // Each viewport gets a unique, auditable pending request.
+    const fixture = new Database(".verification/ui.db");
+    const requestId = `EXAMPLE_ALLOWLIST_${suffix}`;
+    const ip = "2001:db8:1:2::1234";
+    fixture
+      .prepare(
+        "INSERT INTO requests (id,ts,ip,ua,client_family,method,path,resource_slug,decision,status,bytes,latency_ms,source) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+      )
+      .run(
+        requestId,
+        Date.now(),
+        ip,
+        "curl/8",
+        "curl",
+        "GET",
+        "/example-feed",
+        "/example-feed",
+        "deny_pending",
+        403,
+        0,
+        0,
+        "app",
+      );
+    fixture
+      .prepare(
+        "INSERT INTO pending (id,subject,request_id,slugs,expires_at,messages) VALUES (?,?,?,?,?,?)",
+      )
+      .run(
+        requestId,
+        `${ip}|curl`,
+        requestId,
+        '["/example-feed"]',
+        Date.now() + 2 * 86400000,
+        "[]",
+      );
+    fixture.close();
+    await page.goto("/admin/overview");
+    const pending = page.locator(".approval-item").filter({ hasText: ip });
+    await expect(pending).toBeVisible();
+    await shot("overview");
+    await pending.getByRole("button", { name: "Always allow this IP", exact: true }).click();
+    await expect(pending).toHaveCount(0);
+    const listed = await (await page.request.get("/api/admin/allowlist")).json();
+    expect(listed.some((item: { value: string }) => item.value === "2001:db8:1:2::/64")).toBe(true);
+    await page.goto(`/admin/requests?q=${requestId}`);
+    await (width === 390
+      ? page.locator(".audit-card").first()
+      : page.locator(".audit-row").first()
+    ).click();
+    await page.getByRole("button", { name: "Always allow this IP", exact: true }).click();
+    await expect(
+      page.getByText("This network is now always allowed", { exact: true }),
+    ).toBeVisible();
+    await shot("requests-drawer");
+    await page.locator("dialog[open]").getByRole("button", { name: "Close", exact: true }).click();
+    // Match a real gateway request through an explicit loopback entry.
+    const added = await page.request.post("/api/admin/allowlist", {
+      data: { value: "127.0.0.1", label: `Example local ${suffix}` },
+    });
+    expect(added.status()).toBe(201);
+    expect((await page.request.get("/example-feed")).status()).toBe(200);
+    await page.goto("/admin/requests");
+    await page
+      .getByRole("combobox", { name: "Decision", exact: true })
+      .selectOption("allow_allowlist");
+    await expect(page.locator(width === 390 ? ".audit-card" : ".audit-row").first()).toContainText(
+      "Allowlist",
+    );
+    await shot("requests");
+    await page
+      .locator(width === 390 ? ".audit-card" : ".audit-row")
+      .first()
+      .click();
+    await expect(page.locator(".detail-list").first()).toContainText(`Example local ${suffix}`);
+    await expect(page.locator(".drawer-summary .pill")).toHaveClass(/allow/);
+    await shot("matched-drawer");
+    const { id } = await added.json();
+    expect((await page.request.delete(`/api/admin/allowlist/${id}`, { data: {} })).status()).toBe(
+      200,
+    );
+    await page.locator("dialog[open]").getByRole("button", { name: "Close", exact: true }).click();
+    await page.goto("/admin/approvals");
+    await expect(page.locator(".skeleton")).toHaveCount(0);
+    await shot("approvals");
   });

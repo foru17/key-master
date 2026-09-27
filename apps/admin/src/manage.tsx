@@ -16,6 +16,7 @@ import {
 import { type CSSProperties, type FormEvent, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import { AllowlistSection } from "./allowlist";
 import { useAction, useData } from "./api";
 import {
   Button,
@@ -197,6 +198,10 @@ export function Grants() {
           {t("newGrant")}
         </Button>
       </PageHeading>
+      <AllowlistSection />
+      <div className="section-head">
+        <h2>{t("temporaryGrants")}</h2>
+      </div>
       <ErrorBox error={query.error} retry={() => void query.refetch()} />
       {query.isPending ? (
         <Skeleton />
