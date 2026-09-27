@@ -304,3 +304,58 @@ it("blocking revokes matching grants", async () => {
     store.db.select().from(schema.blocks).where(eq(schema.blocks.subject, "203.0.113.9")).get(),
   ).toBeTruthy();
 });
+
+it.each([
+  ["grants", "POST"],
+  ["grants/missing", "PATCH"],
+  ["grants/missing", "DELETE"],
+  ["tokens", "POST"],
+  ["tokens/missing", "DELETE"],
+  ["resources", "POST"],
+  ["resources/missing", "PUT"],
+  ["resources/missing", "DELETE"],
+  ["settings", "PUT"],
+  ["blocks", "POST"],
+  ["approvals/missing", "POST"],
+])("protects mutation %s %s before parsing input", async (path, method) => {
+  expect((await req(`admin/${path}`, method, {}, false)).status).toBe(401);
+  config.admin.allowed_cidrs = [];
+  expect((await req(`admin/${path}`, method, {})).status).toBe(403);
+});
+it("persists pending requests when Telegram is not configured", async () => {
+  const offline = createApp({ store, config, secrets, now: () => now });
+  await offline.request(
+    "https://example.com/private",
+    { headers: { "user-agent": "curl/8" } },
+    peer,
+  );
+  await offline.request(
+    "https://example.com/private",
+    { headers: { "user-agent": "curl/8" } },
+    peer,
+  );
+  expect(store.db.select().from(schema.pending).all()).toHaveLength(1);
+});
+it.each(["grants", "tokens", "resources"])(
+  "returns 404 for unknown %s revocation",
+  async (path) => {
+    expect((await req(`admin/${path}/missing`, "DELETE", {})).status).toBe(404);
+  },
+);
+it("rejects expired token issuance and invalid settings without modifying state", async () => {
+  expect(
+    (
+      await req("admin/tokens", "POST", {
+        label: "Example",
+        kind: "machine",
+        scope: ["*"],
+        expiresAt: now,
+      })
+    ).status,
+  ).toBe(400);
+  expect(
+    (await req("admin/settings", "PUT", { observe_mode: true, durations: { grant_default: -1 } }))
+      .status,
+  ).toBe(400);
+  expect(config.observe_mode).toBe(false);
+});

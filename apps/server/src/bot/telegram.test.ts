@@ -283,3 +283,13 @@ describe("polling and transport", () => {
     await expect(http.call("getUpdates", {})).rejects.toThrow("rejected");
   });
 });
+
+it("loads Telegram identity once and reports transport failures without leaking credentials", async () => {
+  vi.mocked(api.call).mockResolvedValueOnce({ username: "example_bot" });
+  await bot.refreshIdentity();
+  expect(getState(store, "telegram_username")).toBe("example_bot");
+  expect(getState(store, "telegram_connected")).toBe("true");
+  vi.mocked(api.call).mockRejectedValueOnce(new Error("offline"));
+  await bot.refreshIdentity();
+  expect(getState(store, "telegram_connected")).toBe("false");
+});

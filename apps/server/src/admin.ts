@@ -160,7 +160,10 @@ export function createAdmin(options: {
         "SELECT count(*) n FROM requests WHERE resource_slug IS NOT NULL AND ts >= ? AND decision LIKE 'deny_%'",
         since,
       ),
-      pending: pending().length,
+      pending: count(
+        "SELECT count(*) n FROM pending WHERE resolved_at IS NULL AND expires_at > ?",
+        clock(),
+      ),
       grants: count(
         "SELECT count(*) n FROM grants WHERE revoked_at IS NULL AND expires_at > ?",
         clock(),
@@ -493,7 +496,7 @@ export function createAdmin(options: {
     notice: config.notice,
     telegram: {
       mode: config.telegram.mode,
-      connected: !!options.sendCode,
+      connected: !!options.sendCode && getState(store, "telegram_connected") !== "false",
       username: getState(store, "telegram_username") ?? null,
       ownerChats: config.telegram.owner_chat_ids,
     },

@@ -17,6 +17,7 @@ const enabled =
 const bot = enabled
   ? new TelegramBot(store, config, secrets, new HttpTelegramApi(secrets.telegramToken))
   : undefined;
+if (bot) void bot.refreshIdentity();
 const app = createApp({ store, config, secrets, ...(bot ? { bot } : {}) });
 const server = serve({ fetch: app.fetch, hostname: config.listen.host, port: config.listen.port });
 const polling = bot && config.telegram.mode === "polling" ? bot.startPolling() : undefined;

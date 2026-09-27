@@ -4,7 +4,7 @@
     "task": "Secure sessions, shared approvals and complete admin API",
     "verification": "Table-driven Vitest and server build",
     "passes": true,
-    "evidence": "Server Vitest: 94 passed; server TypeScript build exit 0"
+    "evidence": "Server Vitest: 111 passed, including 44 admin and 30 Telegram tests; server TypeScript build exit 0"
   },
   {
     "id": "ui",
@@ -17,7 +17,8 @@
     "id": "seed",
     "task": "Bounded example seed and reproducible UI acceptance harness",
     "verification": "pnpm seed and Playwright assertions",
-    "passes": false
+    "passes": true,
+    "evidence": "pnpm seed exit 0; independent SQLite counts: 4 resources, 5 tokens, 6 grants, 1143 requests, 3 pending; Playwright 5 passed on an isolated auto-started preview"
   },
   {
     "id": "delivery",

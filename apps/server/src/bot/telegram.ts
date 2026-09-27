@@ -76,6 +76,18 @@ export class TelegramBot {
   private async send(chatId: string, text: string, extra: Record<string, unknown> = {}) {
     return this.api.call("sendMessage", { chat_id: chatId, text: text.slice(0, 3900), ...extra });
   }
+  async refreshIdentity() {
+    try {
+      const identity = z
+        .object({ username: z.string().max(100) })
+        .parse(await this.api.call("getMe", {}));
+      setState(this.store, "telegram_username", identity.username);
+      setState(this.store, "telegram_connected", "true");
+    } catch {
+      setState(this.store, "telegram_connected", "false");
+      this.event("system", "identity_failed");
+    }
+  }
   async sendLoginCode(code: string) {
     let delivered = false;
     for (const chatId of this.config.telegram.owner_chat_ids.slice(0, 20)) {
