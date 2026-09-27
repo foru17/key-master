@@ -304,3 +304,11 @@ for (const theme of ["light", "dark"] as const)
       await expect(page.locator(".sidebar-footer")).toBeInViewport();
     }
   });
+
+test("brand has no decorative slash on desktop and mobile", async ({ page }) => {
+  await login(page);
+  await expect(page.locator(".sidebar .brand")).toHaveText("key-master");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "Open navigation", exact: true }).click();
+  await expect(page.locator(".mobile-nav .brand")).toHaveText("key-master");
+});

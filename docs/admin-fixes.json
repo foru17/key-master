@@ -10,7 +10,8 @@
     "id": "brand",
     "task": "Remove the decorative slash from the sidebar brand",
     "verification": "Playwright desktop and mobile brand assertions",
-    "passes": false
+    "passes": true,
+    "evidence": "Admin build exit 0; Playwright desktop/mobile brand case: 1 passed."
   },
   {
     "id": "time",

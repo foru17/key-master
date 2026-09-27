@@ -265,7 +265,7 @@ function AuthenticatedShell({ onLogout }: { onLogout: () => void }) {
         <span className="brand-mark">
           <KeyRound size={19} />
         </span>
-        key-master<span className="version">/</span>
+        key-master
       </NavLink>
       <div className="workspace-label">{t("workspace")}</div>
       <nav aria-label={t("menu")}>
