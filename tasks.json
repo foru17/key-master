@@ -17,7 +17,8 @@
     "id": "telegram",
     "task": "Owner-only polling, deduplicated approvals, device tokens and commands",
     "verification": "Mock Telegram tests including unauthorized updates, callbacks and commands",
-    "passes": false
+    "passes": true,
+    "evidence": "Server Vitest: 63 passed, including 28 mock Telegram tests; TypeScript build exit 0"
   },
   {
     "id": "admin",
