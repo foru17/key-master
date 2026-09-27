@@ -68,5 +68,36 @@
     "verification": "pnpm install && pnpm -r test && pnpm -r build; pnpm lint; requested grep is empty",
     "passes": true,
     "evidence": "pnpm install, recursive tests (168 core + 66 server), recursive build and lint exit 0; final Docker image healthy with repository bind mount, curl health 200, UID 1000; requested grep empty (exit 1); gitleaks no leaks"
+  },
+  {
+    "id": "allowlist-core",
+    "task": "Pure allowlist matching and validation",
+    "verification": "Core table-driven Vitest tests and build",
+    "passes": true,
+    "evidence": "Core Vitest 271 passed; TypeScript build exit 0"
+  },
+  {
+    "id": "allowlist-storage",
+    "task": "Migration, config import, DNS refresh, request audit",
+    "verification": "Server allowlist tests and build",
+    "passes": false
+  },
+  {
+    "id": "allowlist-actions",
+    "task": "Telegram commands/callbacks and admin API",
+    "verification": "Telegram and admin API tests",
+    "passes": false
+  },
+  {
+    "id": "allowlist-ui",
+    "task": "Allowlist management and quick actions",
+    "verification": "UI behavior, desktop/mobile/dark screenshots, baseline comparison",
+    "passes": false
+  },
+  {
+    "id": "allowlist-delivery",
+    "task": "Specification, README and adversarial acceptance",
+    "verification": "pnpm -r test && pnpm -r build && pnpm lint; identifier scan",
+    "passes": false
   }
 ]

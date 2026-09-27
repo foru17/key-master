@@ -1,8 +1,10 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import ipaddr from "ipaddr.js";
+import { type AllowlistEntry, matchesAllowlist } from "./allowlist.js";
 import { themeCss } from "./theme.js";
 import { formatTimestamp } from "./time.js";
 
+export * from "./allowlist.js";
 export * from "./client.js";
 export { validTimeZone } from "./time.js";
 
@@ -114,6 +116,7 @@ export type DecisionName =
   | "allow_token"
   | "allow_internal"
   | "deny_unknown"
+  | "allow_allowlist"
   | "allow_grant"
   | "deny_blocked"
   | "deny_pending";
@@ -124,6 +127,7 @@ export type Decision = {
   notify: boolean;
   tokenId?: string;
   grantId?: string;
+  allowlistId?: string;
 };
 export type DecisionInput = {
   resource: Resource | null;
@@ -134,6 +138,7 @@ export type DecisionInput = {
   now: number;
   tokens: Token[];
   grants: Grant[];
+  allowlist?: AllowlistEntry[];
   blocks: Block[];
   internalCidrs: string[];
   pepper?: string;
@@ -165,6 +170,8 @@ export function decide(input: DecisionInput): Decision {
   if (token) return { ...result("allow_token"), tokenId: token.id };
   if (inCidrs(ip, input.internalCidrs)) return result("allow_internal");
   if (resource.policy === "token_only") return result("deny_unknown");
+  const entry = input.allowlist?.find((item) => matchesAllowlist(item, ip, resource.slug));
+  if (entry) return { ...result("allow_allowlist"), allowlistId: entry.id };
   const subject = `${ip}|${detectClient(input.ua, input.accept)}`;
   const grant = input.grants.find(
     (g) =>
