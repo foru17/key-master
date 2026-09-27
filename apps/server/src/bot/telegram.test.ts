@@ -109,6 +109,30 @@ describe("notifications", () => {
   });
 });
 describe("owner actions", () => {
+  it("delivers long scopes as complete individual URLs", async () => {
+    const slugs = Array.from({ length: 20 }, (_, index) => `/${index}-${"x".repeat(200)}`);
+    config.resources = slugs.map((slug) => ({
+      slug,
+      kind: "inline",
+      source: "TEST",
+      content_type: "text/plain",
+      policy: "approval",
+      enabled: true,
+    }));
+    syncResources(store, config, now);
+    for (const slug of slugs) await pending(slug);
+    await callback("device");
+    const replies = vi
+      .mocked(api.call)
+      .mock.calls.filter(
+        (call) => call[0] === "sendMessage" && String(call[1].text).includes("?k="),
+      );
+    expect(replies).toHaveLength(slugs.length);
+    expect(
+      replies.map((call) => new URL(String(call[1].text).split("\n")[1] ?? "").pathname),
+    ).toEqual(slugs);
+    expect(replies.every((call) => String(call[1].text).length < 4096)).toBe(true);
+  });
   it.each(["allow0", "allow1", "deny", "device"])(
     "action %s is audited and edits message once",
     async (action) => {

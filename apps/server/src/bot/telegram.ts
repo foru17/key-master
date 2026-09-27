@@ -261,7 +261,7 @@ export class TelegramBot {
           return url.href;
         });
         try {
-          await this.send(chatId, `${outcome}\n${links.join("\n")}`);
+          for (const link of links.slice(0, 10000)) await this.send(chatId, `${outcome}\n${link}`);
         } catch {
           this.event(actor, "device_delivery_failed_revoke_and_reissue");
         }
@@ -271,7 +271,10 @@ export class TelegramBot {
           await this.api.call("editMessageText", {
             chat_id: target.chatId,
             message_id: target.messageId,
-            text: `${outcome} · ${duration}s\n${pending.subject}\n${pending.slugs.join(", ")}\n${actor}`,
+            text: `${outcome} · ${duration}s\n${pending.subject}\n${pending.slugs.join(", ")}\n${actor}`.slice(
+              0,
+              3900,
+            ),
             reply_markup: { inline_keyboard: [] },
           });
         } catch {

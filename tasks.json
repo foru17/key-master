@@ -59,7 +59,8 @@
     "id": "device-links",
     "task": "Deliver every issued device link without truncating Telegram messages",
     "verification": "Mock delivery of more than 4096 characters of scoped URLs preserves every link",
-    "passes": false
+    "passes": true,
+    "evidence": "Server Vitest: 66 passed; TypeScript build exit 0; 20 long URLs delivered intact"
   },
   {
     "id": "acceptance",
