@@ -1,4 +1,5 @@
 import {
+  allowlistValueForIp,
   clientFamilies,
   describeUserAgent,
   hashToken,
@@ -10,9 +11,11 @@ import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { ulid } from "ulid";
 import { z } from "zod";
-import { resolveApproval } from "./approval.js";
+import { createAllowlist, revokeAllowlist } from "./allowlist.js";
+import { clearPendingSubject, resolveApproval } from "./approval.js";
 import { createLoginCode, rateLimit, redeemCode } from "./auth.js";
 import {
+  allowlistInput,
   type Config,
   configSchema,
   resourceSchema,
@@ -286,7 +289,18 @@ export function createAdmin(options: {
       .where(eq(schema.requests.id, c.req.param("id")))
       .get();
     return row
-      ? c.json({ ...row, ipInfo: await geo.lookup(row.ip), client: describeUserAgent(row.ua) })
+      ? c.json({
+          ...row,
+          ipInfo: await geo.lookup(row.ip),
+          client: describeUserAgent(row.ua),
+          allowlist: row.allowlistId
+            ? (store.db
+                .select()
+                .from(schema.allowlist)
+                .where(eq(schema.allowlist.id, row.allowlistId))
+                .get() ?? null)
+            : null,
+        })
       : c.json(fail("Not found / 未找到"), 404);
   });
   api.get("/admin/approvals", (c) =>
@@ -303,7 +317,10 @@ export function createAdmin(options: {
   );
   api.post("/admin/approvals/:id", async (c) => {
     const input = z
-      .object({ action: z.enum(["allow", "deny", "device_token"]), duration: duration.optional() })
+      .object({
+        action: z.enum(["allow", "deny", "device_token", "always"]),
+        duration: duration.optional(),
+      })
       .parse(await c.req.json());
     const result = resolveApproval(
       store,
@@ -330,6 +347,59 @@ export function createAdmin(options: {
         : [],
     });
   });
+  api.get("/admin/allowlist", (c) =>
+    c.json(
+      store.db
+        .select()
+        .from(schema.allowlist)
+        .where(isNull(schema.allowlist.revokedAt))
+        .orderBy(desc(schema.allowlist.createdAt))
+        .limit(1000)
+        .all(),
+    ),
+  );
+  api.post("/admin/allowlist", async (c) => {
+    const input = z
+      .union([allowlistInput, z.strictObject({ requestId: z.string().min(1).max(50) })])
+      .parse(await c.req.json());
+    if ("requestId" in input) {
+      const request = store.db
+        .select()
+        .from(schema.requests)
+        .where(eq(schema.requests.id, input.requestId))
+        .get();
+      if (!request) return c.json(fail("Not found / 未找到"), 404);
+      const value = allowlistValueForIp(request.ip);
+      if (!value) return c.json(fail("Invalid IP / IP 无效"), 400);
+      const row = store.db.transaction(() => {
+        const row = createAllowlist(
+          store,
+          {
+            value,
+            label: `admin ${request.clientFamily} ${new Date(clock()).toISOString().slice(0, 10)}`,
+            scope: ["*"],
+            source: "admin",
+            createdBy: "admin:owner",
+          },
+          clock(),
+        );
+        clearPendingSubject(store, request.ip, request.clientFamily, clock());
+        return row;
+      });
+      return c.json({ id: row.id }, 201);
+    }
+    const row = createAllowlist(
+      store,
+      { ...input, source: "admin", createdBy: "admin:owner" },
+      clock(),
+    );
+    return c.json({ id: row.id }, 201);
+  });
+  api.delete("/admin/allowlist/:id", (c) =>
+    revokeAllowlist(store, c.req.param("id"), clock())
+      ? c.json({ ok: true })
+      : c.json(fail("Not found or already removed / 未找到或已移除"), 404),
+  );
   api.get("/admin/grants", (c) =>
     c.json(
       store.db

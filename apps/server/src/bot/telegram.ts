@@ -3,10 +3,12 @@ import { describeUserAgent, normalizeIp } from "@key-master/core";
 import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import { ulid } from "ulid";
 import { z } from "zod";
+import { createAllowlist, revokeAllowlist } from "../allowlist.js";
 import type { PendingRequest } from "../app.js";
 import { recordPending, resolveApproval } from "../approval.js";
 import { createLoginCode } from "../auth.js";
 import type { Config, Secrets } from "../config.js";
+import { allowlistInput } from "../config.js";
 import { getState, type Store, setState } from "../db.js";
 import { flag, GeoService } from "../geo.js";
 import * as schema from "../schema.js";
@@ -208,7 +210,18 @@ export class TelegramBot {
       try {
         const result = z.object({ message_id: z.number() }).parse(
           await this.send(chatId, message, {
-            reply_markup: { inline_keyboard: [buttons.slice(0, 2), buttons.slice(2)] },
+            reply_markup: {
+              inline_keyboard: [
+                buttons.slice(0, 2),
+                buttons.slice(2),
+                [
+                  {
+                    text: this.text("Always allow this IP", "长期放行此 IP"),
+                    callback_data: `always:${pending.id}`,
+                  },
+                ],
+              ],
+            },
           }),
         );
         pending.messages.push({ chatId, messageId: result.message_id });
@@ -238,7 +251,27 @@ export class TelegramBot {
     const actor = `telegram:${update.callback_query?.from.id ?? msg?.from?.id ?? chatId}`;
     if (update.callback_query) {
       const callback = update.callback_query;
-      const match = /^(allow0|allow1|device|deny):([0-9A-HJKMNP-TV-Z]{26})$/.exec(
+      const removal = /^unallow:([A-Za-z0-9_-]{1,50})$/.exec(callback.data ?? "");
+      if (removal) {
+        const removed = revokeAllowlist(this.store, removal[1] ?? "", this.clock());
+        this.event(actor, `allowlist_revoke:${removal[1]}`);
+        const outcome = removed
+          ? this.text("Allowlist entry removed", "白名单条目已移除")
+          : this.text("Not found or already removed", "未找到或已移除");
+        if (removed && msg)
+          await this.api.call("editMessageText", {
+            chat_id: chatId,
+            message_id: msg.message_id,
+            text: `${outcome} · ${removal[1]}`,
+            reply_markup: { inline_keyboard: [] },
+          });
+        await this.api.call("answerCallbackQuery", {
+          callback_query_id: callback.id,
+          text: outcome,
+        });
+        return;
+      }
+      const match = /^(allow0|allow1|device|deny|always):([0-9A-HJKMNP-TV-Z]{26})$/.exec(
         callback.data ?? "",
       );
       const pending = match
@@ -277,7 +310,14 @@ export class TelegramBot {
         this.secrets,
         {
           id: pending.id,
-          action: action === "device" ? "device_token" : action === "deny" ? "deny" : "allow",
+          action:
+            action === "device"
+              ? "device_token"
+              : action === "deny"
+                ? "deny"
+                : action === "always"
+                  ? "always"
+                  : "allow",
           duration,
           actor,
           ...(msg ? { messageId: msg.message_id } : {}),
@@ -287,11 +327,13 @@ export class TelegramBot {
       if (!resolved) return;
       secret = resolved.token?.secret;
       const outcome =
-        action === "device"
-          ? this.text("Device token issued", "设备令牌已签发")
-          : action === "deny"
-            ? this.text("Denied", "已拒绝")
-            : this.text("Allowed", "已允许");
+        action === "always"
+          ? this.text("Always allowed", "已长期放行")
+          : action === "device"
+            ? this.text("Device token issued", "设备令牌已签发")
+            : action === "deny"
+              ? this.text("Denied", "已拒绝")
+              : this.text("Allowed", "已允许");
       this.event(actor, `approval_${action}`);
       if (secret) {
         const links = pending.slugs.map((slug) => {
@@ -310,7 +352,7 @@ export class TelegramBot {
           await this.api.call("editMessageText", {
             chat_id: target.chatId,
             message_id: target.messageId,
-            text: `${outcome} · ${duration}s\n${pending.subject}\n${pending.slugs.join(", ")}\n${actor}`.slice(
+            text: `${outcome}${action === "always" ? "" : ` · ${duration}s`}\n${pending.subject}\n${pending.slugs.join(", ")}\n${actor}`.slice(
               0,
               3900,
             ),
@@ -333,9 +375,71 @@ export class TelegramBot {
         await this.send(
           chatId,
           this.text("Commands", "命令") +
-            "\n/status\n/grant <ip> [minutes]\n/revoke <ip|token id>\n/tokens\n/audit [n]\n/login\n/help",
+            "\n/allow <ip|cidr|host> [label]\n/allowlist\n/unallow <id>\n/status\n/grant <ip> [minutes]\n/revoke <ip|token id>\n/tokens\n/audit [n]\n/login\n/help",
         );
         break;
+      case "/allow": {
+        const parsed = allowlistInput.safeParse({
+          value: arg,
+          label: parts.slice(2).join(" ") || arg,
+        });
+        if (!parsed.success) {
+          await this.send(
+            chatId,
+            this.text(
+              "Invalid IP, CIDR or hostname (minimum IPv4 /24, IPv6 /48)",
+              "IP、CIDR 或主机名无效（最宽 IPv4 /24、IPv6 /48）",
+            ),
+          );
+          break;
+        }
+        const row = createAllowlist(
+          this.store,
+          { ...parsed.data, source: "command", createdBy: actor },
+          now,
+        );
+        await this.send(
+          chatId,
+          `${this.text("Allowlist entry added", "白名单条目已添加")}\n${row.id} · ${row.label} · ${row.value}`,
+        );
+        break;
+      }
+      case "/unallow": {
+        const removed = revokeAllowlist(this.store, arg ?? "", now);
+        await this.send(
+          chatId,
+          removed
+            ? this.text("Allowlist entry removed", "白名单条目已移除")
+            : this.text("Not found or already removed", "未找到或已移除"),
+        );
+        break;
+      }
+      case "/allowlist": {
+        const rows = this.store.db
+          .select()
+          .from(schema.allowlist)
+          .where(isNull(schema.allowlist.revokedAt))
+          .orderBy(desc(schema.allowlist.createdAt))
+          .limit(50)
+          .all();
+        await this.send(
+          chatId,
+          `${this.text("Allowlist (latest 50)", "长期白名单（最近 50 条）")}: ${rows.length}`,
+        );
+        for (const row of rows)
+          await this.send(
+            chatId,
+            `${row.id}\n${row.label} · ${row.value}\n${this.text("Resolved", "解析结果")}: ${row.resolved.join(", ") || "—"}\n${this.text("Last matched", "最近命中")}: ${row.lastMatchedAt === null ? "—" : new Date(row.lastMatchedAt).toISOString()}`,
+            {
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: this.text("Remove", "移除"), callback_data: `unallow:${row.id}` }],
+                ],
+              },
+            },
+          );
+        break;
+      }
       case "/status": {
         const active = this.store.db
           .select()

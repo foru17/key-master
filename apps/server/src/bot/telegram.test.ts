@@ -75,7 +75,7 @@ describe("notifications", () => {
     await pending();
     expect(messageId).toBe(2);
   });
-  it("shows four buttons and trimmed UA", async () => {
+  it("shows five buttons and trimmed UA", async () => {
     await pending();
     const payload = vi.mocked(api.call).mock.calls[0]?.[1];
     expect(payload?.text).toContain("203.0.113.10");
@@ -85,6 +85,7 @@ describe("notifications", () => {
       "Allow 1 h",
       "Issue device token",
       "Deny 1 h",
+      "Always allow this IP",
     ]);
   });
   it("does not notify for token-only, blocked or missing resources", async () => {
@@ -292,4 +293,117 @@ it("loads Telegram identity once and reports transport failures without leaking 
   vi.mocked(api.call).mockRejectedValueOnce(new Error("offline"));
   await bot.refreshIdentity();
   expect(getState(store, "telegram_connected")).toBe("false");
+});
+
+describe("long-term allowlist", () => {
+  it.each(["203.0.113.10", "2001:db8:1:2::abcd"])(
+    "always callback saves %s and clears pending/block atomically",
+    async (ip) => {
+      const app = createApp({ store, config, secrets, bot, now: () => now });
+      await app.request(
+        "http://example.com/private",
+        { headers: { "User-Agent": "curl/8" } },
+        { incoming: { socket: { remoteAddress: ip } } as IncomingMessage },
+      );
+      store.db
+        .insert(schema.blocks)
+        .values({ subject: `${ip}|curl`, until: now + 1000, reason: "test" })
+        .run();
+      await callback("always");
+      expect(store.db.select().from(schema.allowlist).get()).toMatchObject({
+        value: ip.includes(":") ? "2001:db8:1:2::/64" : ip,
+        kind: ip.includes(":") ? "cidr" : "ip",
+        scope: ["*"],
+        source: "telegram",
+        label: `telegram curl ${new Date(now).toISOString().slice(0, 10)}`,
+      });
+      expect(store.db.select().from(schema.pending).get()?.resolvedAt).toBe(now);
+      expect(store.db.select().from(schema.blocks).all()).toEqual([]);
+      expect(store.db.select().from(schema.grants).all()).toEqual([]);
+      expect(store.db.select().from(schema.approvals).get()).toMatchObject({
+        action: "always",
+        durationS: 0,
+      });
+      expect(
+        vi
+          .mocked(api.call)
+          .mock.calls.some(
+            ([method, payload]) =>
+              method === "editMessageText" && String(payload.text).includes("Always allowed"),
+          ),
+      ).toBe(true);
+      await callback("always");
+      expect(store.db.select().from(schema.allowlist).all()).toHaveLength(1);
+    },
+  );
+  it.each(["/allow 203.0.113.7 Home", "/allowlist", "/unallow home"])(
+    "ignores unauthorized %s",
+    async (text) => {
+      await command(text, 99999);
+      expect(api.call).not.toHaveBeenCalled();
+      expect(store.db.select().from(schema.allowlist).all()).toEqual([]);
+    },
+  );
+  it("ignores unauthorized and expired always callbacks", async () => {
+    await pending();
+    await callback("always", 99999);
+    now += config.durations.pending * 1000;
+    await callback("always");
+    expect(store.db.select().from(schema.allowlist).all()).toEqual([]);
+  });
+  it.each(["203.0.113.7", "203.0.113.0/24", "2001:db8::/48", "home.example.com"])(
+    "adds, lists and removes %s via commands",
+    async (value) => {
+      await command(`/allow ${value} Example home`);
+      const row = store.db.select().from(schema.allowlist).get();
+      expect(row).toMatchObject({
+        value,
+        label: "Example home",
+        scope: ["*"],
+        source: "command",
+        createdBy: `telegram:${owner}`,
+      });
+      store.db
+        .update(schema.allowlist)
+        .set({ resolved: ["203.0.113.7"], lastMatchedAt: now })
+        .run();
+      await command("/allowlist");
+      const listed = vi
+        .mocked(api.call)
+        .mock.calls.find(([, payload]) => String(payload.text).includes("Last matched"));
+      expect(listed?.[1].text).toContain(new Date(now).toISOString());
+      expect(listed?.[1].reply_markup).toEqual({
+        inline_keyboard: [[{ text: "Remove", callback_data: `unallow:${row?.id}` }]],
+      });
+      await command(`/unallow ${row?.id}`);
+      expect(store.db.select().from(schema.allowlist).get()?.revokedAt).toBe(now);
+    },
+  );
+  it.each(["203.0.113.0/23", "2001:db8::/32", "https://example.com", "bad_.example.com"])(
+    "rejects invalid /allow %s",
+    async (value) => {
+      await command(`/allow ${value}`);
+      expect(store.db.select().from(schema.allowlist).all()).toHaveLength(0);
+      expect(vi.mocked(api.call).mock.calls[0]?.[1].text).toContain("Invalid");
+    },
+  );
+  it("removes with the list button and localizes help", async () => {
+    await command("/allow home.example.com");
+    const row = store.db.select().from(schema.allowlist).get();
+    await bot.handle({
+      update_id: 2,
+      callback_query: {
+        id: "REMOVE",
+        from: { id: owner },
+        message: { message_id: 2, chat: { id: owner } },
+        data: `unallow:${row?.id}`,
+      },
+    });
+    expect(store.db.select().from(schema.allowlist).get()?.revokedAt).toBe(now);
+    config.bot.lang = "zh";
+    await command("/help");
+    expect(vi.mocked(api.call).mock.calls.at(-1)?.[1].text).toContain("/allowlist");
+    await command("/allowlist");
+    expect(vi.mocked(api.call).mock.calls.at(-1)?.[1].text).toContain("长期白名单");
+  });
 });

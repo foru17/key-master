@@ -1,5 +1,7 @@
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { allowlistValueForIp } from "@key-master/core";
+import { and, eq, gt, isNull, or } from "drizzle-orm";
 import { ulid } from "ulid";
+import { createAllowlist } from "./allowlist.js";
 import type { PendingRequest } from "./app.js";
 import type { Config, Secrets } from "./config.js";
 import { issueToken, type Store } from "./db.js";
@@ -39,7 +41,7 @@ export function resolveApproval(
   secrets: Secrets,
   input: {
     id: string;
-    action: "allow" | "deny" | "device_token";
+    action: "allow" | "deny" | "device_token" | "always";
     duration: number;
     actor: string;
     messageId?: number;
@@ -64,7 +66,23 @@ export function resolveApproval(
       .where(eq(schema.pending.id, pending.id))
       .run();
     let token: { id: string; secret: string } | undefined;
-    if (input.action === "device_token")
+    if (input.action === "always") {
+      const [ip, family] = pending.subject.split("|");
+      const value = allowlistValueForIp(ip ?? "");
+      if (!value) throw new Error("Invalid request IP");
+      createAllowlist(
+        store,
+        {
+          value,
+          label: `${input.actor.startsWith("telegram:") ? "telegram" : "admin"} ${family} ${new Date(now).toISOString().slice(0, 10)}`,
+          scope: ["*"],
+          source: input.actor.startsWith("telegram:") ? "telegram" : "admin",
+          createdBy: input.actor,
+        },
+        now,
+      );
+      clearPendingSubject(store, ip ?? "", family ?? "", now);
+    } else if (input.action === "device_token")
       token = issueToken(
         store,
         { kind: "device", label: pending.subject, scope: pending.slugs },
@@ -103,10 +121,23 @@ export function resolveApproval(
         tgMessageId: input.messageId ?? null,
         action: input.action,
         actor: input.actor,
-        durationS: input.action === "device_token" ? 0 : input.duration,
+        durationS: ["device_token", "always"].includes(input.action) ? 0 : input.duration,
         ts: now,
       })
       .run();
     return { pending, token };
   });
+}
+
+export function clearPendingSubject(store: Store, ip: string, family: string, now: number) {
+  const subject = `${ip}|${family}`;
+  store.db
+    .update(schema.pending)
+    .set({ resolvedAt: now })
+    .where(and(eq(schema.pending.subject, subject), isNull(schema.pending.resolvedAt)))
+    .run();
+  store.db
+    .delete(schema.blocks)
+    .where(or(eq(schema.blocks.subject, subject), eq(schema.blocks.subject, ip)))
+    .run();
 }

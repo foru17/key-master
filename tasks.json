@@ -87,7 +87,8 @@
     "id": "allowlist-actions",
     "task": "Telegram commands/callbacks and admin API",
     "verification": "Telegram and admin API tests",
-    "passes": false
+    "passes": true,
+    "evidence": "Server Vitest 247 passed (45 Telegram, 57 admin); TypeScript build exit 0"
   },
   {
     "id": "allowlist-ui",

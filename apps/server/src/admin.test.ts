@@ -462,3 +462,87 @@ it("describes sources and clients, and reports per-resource activity", async () 
   };
   for (const p of approvals.pending) expect(p).toHaveProperty("ipInfo");
 });
+
+it("creates, lists and soft-deletes allowlist entries with audited writes", async () => {
+  const response = await req("admin/allowlist", "POST", {
+    value: "home.example.com",
+    label: "Home",
+  });
+  expect(response.status).toBe(201);
+  const { id } = await response.json();
+  expect(await (await req("admin/allowlist")).json()).toMatchObject([
+    {
+      id,
+      value: "home.example.com",
+      kind: "host",
+      scope: ["*"],
+      source: "admin",
+      createdBy: "admin:owner",
+      resolved: [],
+    },
+  ]);
+  expect((await req(`admin/allowlist/${id}`, "DELETE")).status).toBe(200);
+  expect(await (await req("admin/allowlist")).json()).toEqual([]);
+  expect(store.db.select().from(schema.allowlist).get()?.revokedAt).toBe(now);
+  expect((await req(`admin/allowlist/${id}`, "DELETE")).status).toBe(404);
+  expect(
+    store.db
+      .select()
+      .from(schema.requests)
+      .all()
+      .filter((r) => r.path.includes("/allowlist"))
+      .map((r) => r.method),
+  ).toEqual(["POST", "DELETE", "DELETE"]);
+});
+it.each(["203.0.113.0/23", "2001:db8::/47", "bad_.example.com", "https://example.com"])(
+  "rejects admin allowlist %s",
+  async (value) => {
+    expect((await req("admin/allowlist", "POST", { value, label: "Example" })).status).toBe(400);
+  },
+);
+it.each(["GET", "POST", "DELETE"])("requires auth and CIDR for allowlist %s", async (method) => {
+  const path = method === "DELETE" ? "admin/allowlist/missing" : "admin/allowlist";
+  expect((await req(path, method, method === "GET" ? undefined : {}, false)).status).toBe(401);
+  config.admin.allowed_cidrs = [];
+  expect((await req(path, method, method === "GET" ? undefined : {})).status).toBe(403);
+});
+it("supports request quick allow and matched entry detail including revoked history", async () => {
+  app = createApp({ store, config, secrets, now: () => now });
+  await app.request("http://example.com/private", {}, peer);
+  const request = store.db
+    .select()
+    .from(schema.requests)
+    .all()
+    .find((r) => r.path === "/private");
+  expect((await req("admin/allowlist", "POST", { requestId: request?.id })).status).toBe(201);
+  expect(store.db.select().from(schema.pending).get()?.resolvedAt).toBe(now);
+  expect((await app.request("http://example.com/private", {}, peer)).status).toBe(200);
+  const matched = store.db
+    .select()
+    .from(schema.requests)
+    .all()
+    .find((r) => r.decision === "allow_allowlist");
+  const row = store.db.select().from(schema.allowlist).get();
+  expect(await (await req(`admin/requests/${matched?.id}`)).json()).toMatchObject({
+    allowlistId: row?.id,
+    grantId: null,
+    allowlist: { value: "203.0.113.7" },
+  });
+  expect((await (await req("admin/requests?decision=allow_allowlist")).json()).total).toBe(1);
+  await req(`admin/allowlist/${row?.id}`, "DELETE");
+  expect(await (await req(`admin/requests/${matched?.id}`)).json()).toMatchObject({
+    allowlist: { revokedAt: now },
+  });
+});
+it("resolves pending via always and rejects stale repeats", async () => {
+  app = createApp({ store, config, secrets, now: () => now });
+  await app.request("http://example.com/private", {}, peer);
+  const pending = store.db.select().from(schema.pending).get();
+  expect((await req(`admin/approvals/${pending?.id}`, "POST", { action: "always" })).status).toBe(
+    200,
+  );
+  expect(store.db.select().from(schema.allowlist).get()?.source).toBe("admin");
+  expect((await req(`admin/approvals/${pending?.id}`, "POST", { action: "always" })).status).toBe(
+    409,
+  );
+});
