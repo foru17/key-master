@@ -109,6 +109,11 @@ describe("decision order and HTTP preconditions", () => {
       "deny_pending",
     ],
     [
+      "token revoked at epoch zero",
+      { queryToken: "TEST_TOKEN", tokens: [{ ...token, revokedAt: 0 }] },
+      "deny_pending",
+    ],
+    [
       "wrong token scope",
       { queryToken: "TEST_TOKEN", tokens: [{ ...token, scope: ["/other"] }] },
       "deny_pending",

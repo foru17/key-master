@@ -45,6 +45,13 @@
     "id": "revocation-edge",
     "task": "Reject tokens revoked at Unix epoch zero",
     "verification": "Decision matrix includes revokedAt=0 for GET, HEAD, Range and conditional GET",
+    "passes": true,
+    "evidence": "Core Vitest: 168 passed; TypeScript build exit 0"
+  },
+  {
+    "id": "stream-audit",
+    "task": "Keep request IDs and audit rows when an upstream response body fails",
+    "verification": "Mock response stream failure produces audited 502 with X-Request-Id",
     "passes": false
   },
   {

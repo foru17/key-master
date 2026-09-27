@@ -152,7 +152,7 @@ export function decide(input: DecisionInput): Decision {
     ? input.tokens.find(
         (t) =>
           tokenMatches(input.queryToken ?? "", t.secretHash, input.pepper) &&
-          !t.revokedAt &&
+          t.revokedAt === null &&
           (t.expiresAt === null || t.expiresAt > now) &&
           covers(t.scope, resource.slug),
       )
