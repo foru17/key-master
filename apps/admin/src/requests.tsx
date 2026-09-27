@@ -154,7 +154,7 @@ export function Requests() {
   const virtual = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parent.current,
-    estimateSize: () => 58,
+    estimateSize: () => 56,
     overscan: 8,
   });
   const filter = (key: string, value: string) => {
@@ -167,7 +167,7 @@ export function Requests() {
   return (
     <>
       <PageHeading title={t("requests")} description={t("requestsDesc")} />
-      <div className="filters">
+      <div className="toolbar filters">
         <div className="search-input">
           <Search size={16} />
           <input
@@ -236,11 +236,11 @@ export function Requests() {
       {query.isPending ? (
         <Skeleton />
       ) : rows.length ? (
-        <section className="panel audit-panel">
-          <div className="audit-head audit-grid">
+        <section className="data-table audit-panel">
+          <div className="thead audit-grid">
             {["time", "decision", "resource", "ip", "client", "status", "latency", "source"].map(
               (k) => (
-                <span key={k}>{t(k)}</span>
+                <span key={k}>{t(k === "ip" ? "colOrigin" : k)}</span>
               ),
             )}
           </div>
@@ -251,19 +251,19 @@ export function Requests() {
                 return row ? (
                   <button
                     type="button"
-                    className="audit-row audit-grid"
+                    className="tr audit-row audit-grid"
                     key={row.id}
                     style={{ transform: `translateY(${item.start}px)` }}
                     onClick={() => setSelected(row.id)}
                   >
                     <Timestamp value={row.ts} />
                     <Pill value={row.decision} />
-                    <code>{row.resourceSlug ?? row.path}</code>
+                    <code className="cell-mono truncate">{row.resourceSlug ?? row.path}</code>
                     <IpBadge ip={row.ip} info={row.ipInfo} />
                     <ClientBadge client={row.client} fallback={row.clientFamily} />
-                    <span className="mono">{row.status}</span>
-                    <span className="mono muted">{row.latencyMs} ms</span>
-                    <span className="muted">{row.source}</span>
+                    <span className="cell-mono">{row.status}</span>
+                    <span className="cell-mono muted num">{row.latencyMs} ms</span>
+                    <span className="cell-mono muted">{row.source}</span>
                   </button>
                 ) : null;
               })}
@@ -288,9 +288,7 @@ export function Requests() {
             ))}
           </div>
           <div className="pagination">
-            <span>
-              {query.data?.total} {t("results")}
-            </span>
+            <span className="muted">{t("requestsTotal", { count: query.data?.total ?? 0 })}</span>
             <div className="actions">
               <Button
                 disabled={(query.data?.page ?? 1) <= 1}
@@ -302,7 +300,7 @@ export function Requests() {
               >
                 {t("previous")}
               </Button>
-              <span>{query.data?.page}</span>
+              <span className="cell-mono page-number">{query.data?.page}</span>
               <Button
                 disabled={
                   (query.data?.page ?? 1) * (query.data?.pageSize ?? 30) >= (query.data?.total ?? 0)

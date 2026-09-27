@@ -73,6 +73,16 @@ const mockJapan = {
   asName: "Example Fiber",
   asDomain: "fiber.example",
 };
+// A deliberately long carrier name / IPv6 to check that table columns stay aligned.
+const mockLong = {
+  country: "DE",
+  countryName: "Germany",
+  city: "Frankfurt am Main",
+  continent: "EU",
+  asn: "AS64505",
+  asName: "Example Very Long Carrier Name Telecommunications Holding GmbH & Co. KG",
+  asDomain: "long-carrier.example",
+};
 const blank = {
   country: null,
   countryName: null,
@@ -97,6 +107,7 @@ function mockInfo(raw) {
     const last = Number(ip.split(".")[3] ?? 0);
     return { ip, scope, ...mockNetworks[last % mockNetworks.length], source: "mmdb" };
   }
+  if (/^2001:db8:ffff:/i.test(ip)) return { ip, scope, ...mockLong, source: "mmdb" };
   if (ip.startsWith("198.51.100.") || /^2001:db8:/i.test(ip))
     return { ip, scope, ...mockJapan, source: "mmdb" };
   return { ip, scope, ...blank, source: "none" };
@@ -121,6 +132,12 @@ if (process.env.KM_PREVIEW_RICH !== "0") {
     ["/example-friends", "public", "inline", "Example shared profile for friends\n"],
     ["/example-rules.ini", "public", "upstream", "https://rules.example.com/base.ini"],
     ["/example-legacy", "approval", "inline", "Example legacy profile\n"],
+    [
+      "/example-subscriptions/family/very-long-path-for-alignment-checks.yaml",
+      "approval",
+      "upstream",
+      "https://upstream.example.com/subscriptions/family/very-long-path-for-alignment-checks.yaml",
+    ],
   ];
   const clients = [
     [
@@ -167,8 +184,32 @@ if (process.env.KM_PREVIEW_RICH !== "0") {
       403,
     ],
     ["203.0.113.64", "clash-verge/v2.4.0", "clash-verge", "/example-clash", "allow_grant", 200],
+    [
+      "2001:db8:ffff:1a2b:3c4d:5e6f:7a8b:9c0d",
+      "Shadowrocket/3445 CFNetwork/3896.100.1.2.1 Darwin/27.0.0 iPhone18,3",
+      "shadowrocket",
+      "/example-subscriptions/family/very-long-path-for-alignment-checks.yaml",
+      "allow_grant",
+      200,
+    ],
   ];
   store.db.transaction((tx) => {
+    tx.insert(schema.grants)
+      .values({
+        id: "EXAMPLE_PREVIEW_GRANT_LONG",
+        subjectKind: "ip_client",
+        subject: "2001:db8:ffff:1a2b:3c4d:5e6f:7a8b:9c0d|shadowrocket",
+        scope: [
+          "/example-subscriptions/family/very-long-path-for-alignment-checks.yaml",
+          "/example-clash",
+        ],
+        grantedBy: "telegram:10001",
+        expiresAt: now + 3 * 86400000,
+        revokedAt: null,
+        createdAt: now - 3600000,
+      })
+      .onConflictDoNothing()
+      .run();
     for (const [i, [slug, policy, kind, source]] of extra.entries())
       tx.insert(schema.resources)
         .values({

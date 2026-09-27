@@ -103,14 +103,36 @@ export function Confirm({
     </>
   );
 }
-export function Empty({ title, children }: { title?: string; children?: ReactNode }) {
+export function Empty({
+  title,
+  hint,
+  children,
+}: {
+  title?: string;
+  hint?: string;
+  children?: ReactNode;
+}) {
   const { t } = useTranslation();
   return (
     <div className="empty">
-      <ShieldCheck size={28} />
+      <span className="empty-icon">
+        <ShieldCheck size={18} />
+      </span>
       <h3>{title ?? t("empty")}</h3>
-      <p>{t("emptyHint")}</p>
+      <p>{hint ?? t("emptyHint")}</p>
       {children}
+    </div>
+  );
+}
+/** Header row for a grid table; every row of the same table shares its column template. */
+export function TableHead({ columns }: { columns: (string | null)[] }) {
+  return (
+    <div className="thead">
+      {columns.map((label, i) => (
+        <span key={String(i)} className={label ? undefined : "visually-hidden"}>
+          {label}
+        </span>
+      ))}
     </div>
   );
 }
@@ -152,8 +174,10 @@ export function Field({
 export function Pill({ value }: { value: string }) {
   const { t } = useTranslation();
   const tone =
-    value === "deny_pending"
-      ? "pending"
+    value === "deny_pending" || value === "device_token"
+      ? value === "device_token"
+        ? "info"
+        : "pending"
       : value.startsWith("allow") || value === "active" || value === "enabled"
         ? "allow"
         : value.startsWith("deny") || value === "revoked"

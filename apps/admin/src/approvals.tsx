@@ -1,4 +1,4 @@
-import { ArrowUpRight, Check, Clock3 } from "lucide-react";
+import { ArrowUpRight, Check } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAction, useData } from "./api";
@@ -8,21 +8,15 @@ import {
   Empty,
   ErrorBox,
   PageHeading,
+  Pill,
   SecretDialog,
   Skeleton,
-  Timestamp,
+  TableHead,
   useToast,
 } from "./components";
-import {
-  ClientBadge,
-  flag,
-  formatDuration,
-  IpBadge,
-  networkLabel,
-  ScopeChip,
-  useLocation,
-} from "./identity";
+import { ClientBadge, formatDuration, formatRemaining, IpBadge, RelativeTime } from "./identity";
 import type { IpInfo, Issued, Pending, Settings } from "./types";
+
 export function ApprovalRow({
   item,
   onIssued,
@@ -30,7 +24,7 @@ export function ApprovalRow({
   item: Pending;
   onIssued: (value: Issued) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const toast = useToast();
   const settings = useData<Settings>("settings");
   const action = useAction<Partial<Issued>>(`approvals/${item.id}`, "POST", (data) => {
@@ -38,34 +32,26 @@ export function ApprovalRow({
     if (data.secret) onIssued(data as Issued);
   });
   const durations = settings.data?.durations.options ?? [600, 3600];
-  const [ip, family] = item.subject.split("|");
-  const place = useLocation(item.ipInfo);
-  const network = networkLabel(item.ipInfo);
+  const [ip = item.subject, family] = item.subject.split("|");
   return (
-    <div className="approval-item">
-      <div className="approval-identity">
-        <span className="pending-mark">
-          <Clock3 size={17} />
-        </span>
-        <div className="approval-body">
-          <div className="approval-title">
-            <strong className="mono">{ip}</strong>
-            {item.ipInfo && item.ipInfo.scope !== "public" ? (
-              <ScopeChip info={item.ipInfo} />
-            ) : place ? (
-              <span className="approval-origin">
-                {flag(item.ipInfo?.country)} {place}
-              </span>
-            ) : null}
-          </div>
-          {network && <p className="approval-network">{network}</p>}
-          <p className="approval-meta">
-            <ClientBadge client={item.client} fallback={family} />
-            <code>{item.slugs.join(", ")}</code>
-          </p>
-        </div>
+    <div className="tr approval-item">
+      <div className="td primary">
+        <IpBadge ip={ip} info={item.ipInfo} />
       </div>
-      <div className="actions approval-actions">
+      <div className="td" data-label={t("client")}>
+        <ClientBadge client={item.client} fallback={family} />
+      </div>
+      <div className="td" data-label={t("resource")}>
+        <code className="cell-mono truncate" title={item.slugs.join(", ")}>
+          {item.slugs.join(", ")}
+        </code>
+      </div>
+      <div className="td" data-label={t("colExpiresIn")}>
+        <span className="cell-mono muted" title={new Date(item.expiresAt).toISOString()}>
+          {formatRemaining(item.expiresAt, i18n.language)}
+        </span>
+      </div>
+      <div className="td actions">
         {durations.map((d) => (
           <Button
             key={d}
@@ -89,7 +75,11 @@ export function ApprovalRow({
           onConfirm={() => action.mutate({ action: "deny" })}
         />
       </div>
-      <ErrorBox error={action.error} />
+      {action.error && (
+        <div className="td row-error">
+          <ErrorBox error={action.error} />
+        </div>
+      )}
     </div>
   );
 }
@@ -99,32 +89,65 @@ export function PendingList({ items }: { items: Pending[] }) {
   return (
     <>
       {items.length ? (
-        <div>
+        <div className="data-table is-grid t-pending">
+          <TableHead
+            columns={[t("colOrigin"), t("client"), t("resource"), t("colExpiresIn"), null]}
+          />
           {items.map((item) => (
             <ApprovalRow key={item.id} item={item} onIssued={setIssued} />
           ))}
         </div>
       ) : (
-        <Empty title={t("allClear")} />
+        <div className="data-table">
+          <Empty title={t("allClear")} hint={t("allClearHint")} />
+        </div>
       )}
       {issued && <SecretDialog issued={issued} onClose={() => setIssued(null)} />}
     </>
   );
 }
-export function Approvals() {
+type Decision = {
+  id: string;
+  subject: string;
+  action: string;
+  actor: string;
+  durationS: number;
+  ts: number;
+  ipInfo?: IpInfo | null;
+};
+function DecisionRow({ row }: { row: Decision }) {
   const { t, i18n } = useTranslation();
-  const query = useData<{
-    pending: Pending[];
-    recent: {
-      id: string;
-      subject: string;
-      action: string;
-      actor: string;
-      durationS: number;
-      ts: number;
-      ipInfo?: IpInfo | null;
-    }[];
-  }>("approvals");
+  const [ip = row.subject, family] = row.subject.split("|");
+  return (
+    <div className="tr">
+      <div className="td primary">
+        <IpBadge ip={ip} info={row.ipInfo} />
+      </div>
+      <div className="td" data-label={t("client")}>
+        {family ? <span className="cell-mono">{family}</span> : <span className="muted">—</span>}
+      </div>
+      <div className="td" data-label={t("decision")}>
+        <Pill value={row.action} />
+      </div>
+      <div className="td" data-label={t("colDuration")}>
+        <span className="cell-mono">{formatDuration(row.durationS, i18n.language)}</span>
+      </div>
+      <div className="td" data-label={t("actor")}>
+        <span className="cell-mono muted truncate" title={row.actor}>
+          {row.actor}
+        </span>
+      </div>
+      <div className="td end" data-label={t("time")}>
+        <span className="cell-mono muted">
+          <RelativeTime value={row.ts} />
+        </span>
+      </div>
+    </div>
+  );
+}
+export function Approvals() {
+  const { t } = useTranslation();
+  const query = useData<{ pending: Pending[]; recent: Decision[] }>("approvals");
   return (
     <>
       <PageHeading title={t("approvals")} description={t("approvalsDesc")} />
@@ -134,33 +157,38 @@ export function Approvals() {
       ) : (
         query.data && (
           <>
-            <section className="panel">
+            <section className="section">
               <div className="section-head">
                 <h2>{t("needsYou")}</h2>
                 <span className="count">{query.data.pending.length}</span>
               </div>
               <PendingList items={query.data.pending} />
             </section>
-            <section className="panel">
+            <section className="section">
               <div className="section-head">
                 <h2>{t("recent")}</h2>
+                <span className="count">{query.data.recent.length}</span>
               </div>
               {query.data.recent.length ? (
-                <div className="data-list">
+                <div className="data-table is-grid t-decisions">
+                  <TableHead
+                    columns={[
+                      t("colOrigin"),
+                      t("client"),
+                      t("decision"),
+                      t("colDuration"),
+                      t("actor"),
+                      t("time"),
+                    ]}
+                  />
                   {query.data.recent.map((row) => (
-                    <div className="data-row" key={row.id}>
-                      <IpBadge ip={row.subject.split("|")[0] ?? row.subject} info={row.ipInfo} />
-                      <span>
-                        {t(row.action, { defaultValue: row.action })} ·{" "}
-                        {formatDuration(row.durationS, i18n.language)}
-                      </span>
-                      <span className="muted">{row.actor}</span>
-                      <Timestamp value={row.ts} />
-                    </div>
+                    <DecisionRow key={row.id} row={row} />
                   ))}
                 </div>
               ) : (
-                <Empty />
+                <div className="data-table">
+                  <Empty title={t("recentEmpty")} hint={t("recentEmptyHint")} />
+                </div>
               )}
             </section>
           </>

@@ -1,80 +1,102 @@
-# key-master admin — design brief
+# key-master admin — design system
 
 The admin UI is where the owner audits who fetched what, approves or revokes access, and manages tokens and
-resources. It should feel like a calm, precise security console: quiet neutrals, one warm accent for "needs your
-attention", dense but readable data. Modern SaaS quality, not a legacy back office.
+resources. It follows the Vercel / Cloudflare dashboard language: neutral surfaces, hairline borders, one quiet
+accent, dense data set in a monospace face, and tables whose columns line up exactly.
 
-## Tokens (CSS variables, Tailwind 4 `@theme inline`)
+## Tokens (`apps/admin/src/style.css`)
 
-Light (bare `:root`) / dark (`:root[data-theme="dark"]` and `@media (prefers-color-scheme: dark)` for `system`):
+Light is the bare `:root` / `[data-theme="light"]`; dark is `[data-theme="dark"]` and
+`@media (prefers-color-scheme: dark)` for `system`. Tokens are also scoped by `[data-theme]` so the settings page
+can preview both themes side by side.
 
 | token | light | dark | use |
 |---|---|---|---|
-| `--paper` | `#fafaf8` | `#111412` | app background |
-| `--surface` | `#ffffff` | `#161a17` | cards, tables, dialogs |
-| `--wash` | `#eff1ed` | `#1b221d` | hover rows, subtle fills, sidebar |
-| `--ink` | `#191b1a` | `#f4f6f3` | primary text |
-| `--muted` | `#5f6762` | `#a6b0a8` | secondary text (must stay ≥ 4.5:1 on surface) |
-| `--faint` | `#9aa29c` | `#5f6962` | tertiary / placeholders only |
-| `--line` | `#dde1dc` | `#2b322d` | borders |
-| `--line-strong` | `#c9cfc9` | `#3c453e` | inputs, focus rings base |
-| `--sage` / `--sage-text` | `#b8c8be` / `#53695a` | `#728c7b` / `#b8c8be` | brand, selected nav |
-| `--brass` / `--brass-text` | `#e9d8b4` / `#8a5f16` | `#5a4520` / `#e0b872` | pending approvals, "needs you" |
-| `--allow` | `#3f7d5a` | `#7fb894` | allow decisions |
-| `--deny` | `#b3261e` | `#f2837a` | deny decisions |
-| `--warn` | `#9a5b0b` | `#e0a54a` | warnings |
+| `--bg-page` | `#fafafa` | `#0a0a0a` | app background, sidebar |
+| `--bg` | `#ffffff` | `#111111` | tables, cards, dialogs, inputs |
+| `--bg-subtle` | `#f5f5f5` | `#171717` | table header, hover, code boxes |
+| `--bg-muted` | `#ededed` | `#222222` | selected nav item, meters |
+| `--border` | `#eaeaea` | `#262626` | every hairline |
+| `--border-strong` | `#d4d4d4` | `#3a3a3a` | hover borders, switch track |
+| `--fg` | `#171717` | `#ededed` | primary text |
+| `--fg-muted` | `#616161` | `#a1a1a1` | secondary text; ≥ 4.5:1 on `--bg`, `--bg-page`, `--bg-subtle` |
+| `--fg-faint` | `#8f8f8f` | `#707070` | placeholders and decoration only, never body text |
+| `--primary-bg` / `--primary-fg` | `#171717` / `#fff` | `#ededed` / `#0a0a0a` | primary button, brand mark, avatar |
+| `--accent` / `--accent-ring` | `#0a6cdf` | `#4b9dff` | focus ring |
+| `--{green,amber,red,blue,gray}-{fg,bg}` | | | status badges (dot + tinted background) |
+| `--chart-1` / `--chart-2` | `#0a6cdf` / `#e5484d` | `#3b8eff` / `#ff6369` | allowed / denied series, meters |
 
-Semantic pills: allow (token / grant / internal / public), deny (pending / blocked / unknown), neutral (not_found).
-Pending uses brass, not red: it is a request waiting for the owner, not a failure.
+Status mapping: allow / active / enabled / public → green; deny / revoked → red; pending / approval required →
+amber (a request waiting for the owner, not a failure); token only / device token → blue; expired / not found →
+gray.
 
 ## Type
 
-- UI: `Inter Variable` (@fontsource-variable/inter), fallback `-apple-system, BlinkMacSystemFont, "PingFang SC",
-  "Hiragino Sans GB", "Microsoft YaHei", sans-serif`.
-- Data: `JetBrains Mono` (@fontsource-variable/jetbrains-mono) for IPs, request ids, tokens, timestamps, paths.
-  `font-variant-numeric: tabular-nums` on all numeric columns.
-- Scale: 12 / 13 / 14 (body) / 16 / 20 / 28. Page titles 20 semibold; stat numbers 28 medium.
+- UI: `Geist Variable` (`@fontsource-variable/geist`, bundled locally), fallback system + PingFang / YaHei.
+- Data: `Geist Mono Variable` (`@fontsource-variable/geist-mono`) with `tabular-nums` for IPs, paths, request ids,
+  tokens, ASNs, counts, durations and times (`.cell-mono`).
+- Scale: 11 (meta) / 12 (table header, badges, labels) / 13 (table cells, buttons) / 14 (body) / 16 (dialog
+  title) / 24 (page title, semibold, -0.02em) / 28 (stat numbers, mono).
+
+## Spacing and shape
+
+- 4px grid. Page gutter 24px (16px on phones); content max width 1200px (+ gutters), centred.
+- Radius: 6px controls, 8px tables/cards/popovers, 12px dialogs. Shadows only on buttons (1px), popovers and
+  dialogs.
 
 ## Layout
 
-- Desktop: left sidebar 232px (logo mark = small key glyph + "key-master"), nav: Overview, Requests (audit),
-  Approvals (pending, with brass count badge), Grants, Tokens, Resources, Settings. Top bar: page title, ⌘K
-  command palette (jump to IP / request id / resource), observe-mode chip when enabled, theme menu
-  (light / dark / system), language (中文 / English), account menu (logout).
-- Phone (< 768px): sidebar becomes a sheet from a menu button; tables become stacked cards; no horizontal page scroll.
-- Content max width 1280px, 24px gutters (16px on phone).
+- Sidebar 240px on `--bg-page`, divider drawn on the main column so it spans the document. Nav items 34px, 14px,
+  muted; hover `--bg-subtle`; selected `--bg-muted` + `--fg` + 500 weight. No outlines except the focus ring.
+- Top bar 56px, translucent `--bg-page` with blur: breadcrumb, ⌘K search, observe chip, theme, language, avatar.
+- Page heading: 24px title, one-line description, primary action on the right, 1px divider below, 24px gap.
+- Sections: 14px semibold title + gray count badge, optional right-aligned meta / link; 32px between sections.
 
-## Pages
+## Tables
 
-1. **Overview**: 4 stat cards (requests 24h, denied 24h, pending now, active grants), a requests-over-time chart
-   (stacked allow / deny, 24h and 7d toggle, hand-drawn SVG or a small lib, theme-aware), "Needs you" list of pending
-   approvals with Allow 10m / Allow 1h / Device token / Deny buttons (same actions as Telegram), top clients and
-   top IPs today.
-2. **Requests**: filter bar (time range, decision, client family, resource, IP/request id search), virtualized table
-   (time, decision pill, resource, IP, client icon + family, status, latency, source app/nginx). Row → right drawer
-   with full UA, headers subset, matched token/grant, and quick actions (grant this IP, block).
-3. **Approvals**: pending + recent decisions with actor and duration.
-4. **Grants**: active and expired; countdown for active; revoke; create grant (IP or IP+client, scope, duration).
-5. **Tokens**: machine and device tokens; issue (plaintext shown once in a copy dialog with ready-made URLs),
-   revoke, last used, usage sparkline.
-6. **Resources**: list with policy pills; create / edit (kind file / inline / upstream, content type, policy),
-   enable/disable; preview is never rendered inline for subscription-like content (show size + hash only).
-7. **Settings**: observe mode, durations, notice texts (with live preview of the denied page in both themes),
-   Telegram status (mode, bot username, owner chats), about/version.
+- Every list is a grid table: `.data-table.is-grid` with `--cols` set per table (`t-pending`, `t-decisions`,
+  `t-grants`, `t-tokens`, `t-resources`, `t-rank`). Rows (`.tr`) and the header (`.thead`) are CSS **subgrids** of
+  the table, so a column is as wide as its widest cell in any row and every row lines up; zero-width edge tracks
+  plus the 16px column gap provide the side padding.
+- Header 40px on `--bg-subtle`, 12px muted. Rows ≥ 56px, cells vertically centred, 1px dividers, hover tint.
+- The first cell (`.td.primary`) is the identity (IP + origin, resource path, token label). Numbers and times are
+  mono. The action column is last, sized to its widest row, buttons left-aligned inside it so the first button of
+  every row shares one edge. Actions that do not apply to a row are replaced by an invisible placeholder of the
+  same width (e.g. an expired grant shows **Renew** where active grants show **Edit**, and no Revoke).
+- Secondary and destructive actions live in the ⋯ menu or behind an in-page confirm popover.
+- The virtualised request log keeps a fixed column template (`.audit-grid`) because its rows are absolutely
+  positioned.
+- Phones (< 768px): the header hides and each row becomes a card. The primary cell sits top-left with the row's
+  actions top-right (pending approvals put their four buttons on the last line). Every other cell renders its
+  `data-label` in a fixed 96px label column, so values line up across cards. No horizontal scrolling.
 
-## Interaction
+## Time
 
-- Login: popup dialog over a blurred empty shell (never a full-page redirect): step 1 "Send code to Telegram",
-  step 2 six-digit input (auto-advance, paste support), errors inline. Session 12h.
-- Every destructive action (revoke, block, delete) uses an in-page confirm popover, never `window.confirm`.
-- Toasts for results ("Granted 203.0.113.7 for 10 minutes"). Optimistic updates with rollback on error.
-- Live updates: poll `/api/admin/events` every 5 s (or SSE) for new pending approvals; brass badge + subtle pulse.
-- Empty states with one clear next step. Loading skeletons, not spinners, for tables.
-- Keyboard: ⌘K palette, `g o`/`g r` style nav shortcuts optional, visible focus rings (`--line-strong` + sage).
-- Respect `prefers-reduced-motion`.
+- Tables use relative time with the ISO timestamp in `title` ("3 minutes ago", "10 hr left"). Grants: active →
+  "N left"; expired / revoked → gray badge + "N ago". The request log and the request drawer keep absolute times
+  in the browser's zone because they are an audit trail.
+
+## Controls
+
+- Buttons 32px, 6px radius, 13px/500. Primary: `--primary-bg`. Secondary: `--bg` + 1px border + 1px shadow.
+  Quiet: transparent. Danger text is red; confirmed danger buttons are solid red.
+- Inputs 36px (32px in filter bars), 1px border, border darkens on hover, focus ring `0 0 0 2px var(--bg),
+  0 0 0 4px var(--accent-ring)`. Switches: 32×18 track, green when on (also for `input[role="switch"]`).
+- Segmented filters: 2px inset group on `--bg-subtle`, selected segment on `--bg` with a 1px shadow, counts in mono.
+- Badges 22px pills with a 6px dot; scope chips (private / Tailscale / reserved) are 20px, 4px radius.
+
+## Empty states
+
+Each page states exactly what will appear and why, never a generic "adjust filters or create" line: approvals
+"You're all caught up — new access requests show up here in real time"; recent decisions, grants, tokens and
+rankings each have their own title and hint. A button is shown only when the page can actually create something.
 
 ## Quality bar (checked before release)
 
-- Desktop 1440 and phone 390 screenshots, light and dark, for Overview, Requests (with drawer), Tokens issue dialog,
-  login dialog. No clipped text, no overflow, contrast ≥ 4.5:1 for text in both themes.
-- Denied notice page (server-rendered, not the SPA) matches the same tokens and passes the same checks.
+- Desktop 1440 and phone 390 screenshots, light and dark, for login, overview, requests (+ drawer), approvals,
+  grants, tokens (issue dialog), resources and settings (`pnpm test:ui` writes them to `docs/screenshots/`).
+- Column edges align across rows (check with long IPv6 / ASN / path data), action columns align, no clipped or
+  wrapped control labels, no horizontal page scroll, text contrast ≥ 4.5:1 in both themes (rendered check in
+  `tests/ui/admin.spec.ts`; muted rows use `--fg-muted`, never opacity).
+- The denied notice page (server-rendered, `packages/core/src/theme.ts`) keeps its own tokens and passes the same
+  checks.

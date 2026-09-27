@@ -167,9 +167,9 @@ test("real admin workflows, rollback, bilingual themes and keyboard", async ({ p
   await page.getByRole("button", { name: "Appearance" }).click();
   await page.getByRole("button", { name: "System", exact: true }).click();
   await page.emulateMedia({ colorScheme: "dark" });
-  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(17, 20, 18)");
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(10, 10, 10)");
   await page.emulateMedia({ colorScheme: "light" });
-  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(250, 250, 248)");
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(250, 250, 250)");
   await page.getByRole("button", { name: "中", exact: true }).click();
   await expect(page.locator(".content h1")).toHaveText("请求记录");
   await page.getByRole("button", { name: "EN", exact: true }).click();
@@ -195,7 +195,7 @@ test("real admin workflows, rollback, bilingual themes and keyboard", async ({ p
   await grant.getByRole("button", { name: "Edit", exact: true }).click();
   await page.getByLabel("Duration (seconds)", { exact: true }).fill("3600");
   await page.locator("dialog").getByRole("button", { name: "Save changes" }).click();
-  await expect(grant.getByText("60m remaining")).toBeVisible();
+  await expect(grant.getByText("60 min left")).toBeVisible();
   await grant.getByRole("button", { name: "Revoke", exact: true }).click();
   await page.locator(":popover-open").getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(grant.getByText("Active", { exact: true })).toBeVisible();
@@ -295,11 +295,11 @@ for (const theme of ["light", "dark"] as const)
     await expect(sidebar).toHaveCSS("position", "sticky");
     await expect(page.locator("#root")).toHaveCSS(
       "background-color",
-      theme === "light" ? "rgb(239, 241, 237)" : "rgb(27, 34, 29)",
+      theme === "light" ? "rgb(250, 250, 250)" : "rgb(10, 10, 10)",
     );
     await expect(sidebar).toHaveCSS(
       "background-color",
-      theme === "light" ? "rgb(239, 241, 237)" : "rgb(27, 34, 29)",
+      theme === "light" ? "rgb(250, 250, 250)" : "rgb(10, 10, 10)",
     );
     for (const end of [false, true]) {
       await page.evaluate((end) => window.scrollTo(0, end ? document.body.scrollHeight : 0), end);

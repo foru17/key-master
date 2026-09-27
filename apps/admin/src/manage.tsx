@@ -28,10 +28,10 @@ import {
   Pill,
   SecretDialog,
   Skeleton,
-  Timestamp,
+  TableHead,
   useToast,
 } from "./components";
-import { formatBytes, IpBadge, RelativeTime } from "./identity";
+import { formatBytes, formatRemaining, IpBadge, RelativeTime } from "./identity";
 import type { Grant, Issued, Resource, Token } from "./types";
 
 const fields = (event: FormEvent<HTMLFormElement>) => {
@@ -106,49 +106,68 @@ export function GrantForm({
     </Modal>
   );
 }
+type GrantStatus = "active" | "expired" | "revoked";
+const grantStatus = (item: Grant): GrantStatus =>
+  item.revokedAt !== null ? "revoked" : item.expiresAt <= Date.now() ? "expired" : "active";
 function GrantRow({ item, onEdit }: { item: Grant; onEdit: () => void }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const toast = useToast();
   const action = useAction(`grants/${item.id}`, "DELETE", () => toast(t("saved")));
-  const status =
-    item.revokedAt !== null ? "revoked" : item.expiresAt <= Date.now() ? "expired" : "active";
+  const status = grantStatus(item);
+  const [ip = item.subject, family] = item.subject.split("|");
   return (
-    <div className="management-row">
-      <span className="resource-icon">
-        <ShieldCheck size={18} />
-      </span>
-      <div className="identity">
-        <div className="grant-subject">
-          <IpBadge ip={item.subject.split("|")[0] ?? item.subject} info={item.ipInfo} />
-          {item.subject.includes("|") && (
-            <span className="family-chip">{item.subject.split("|")[1]}</span>
-          )}
-        </div>
-        <p>
-          <code>{item.scope.join(", ")}</code> · {item.grantedBy}
-        </p>
+    <div className={`tr management-row${status === "active" ? "" : " is-muted"}`}>
+      <div className="td primary">
+        <IpBadge ip={ip} info={item.ipInfo} />
       </div>
-      <div>
+      <div className="td" data-label={t("client")}>
+        {family ? (
+          <span className="tag mono">{family}</span>
+        ) : (
+          <span className="muted">{t("anyClient")}</span>
+        )}
+      </div>
+      <div className="td" data-label={t("colScope")}>
+        <code className="cell-mono truncate" title={item.scope.join(", ")}>
+          {item.scope.join(", ")}
+        </code>
+      </div>
+      <div className="td" data-label={t("grantedBy")}>
+        <span className="cell-mono muted truncate" title={item.grantedBy}>
+          {item.grantedBy}
+        </span>
+      </div>
+      <div className="td status-cell" data-label={t("status")}>
         <Pill value={status} />
-        <p className="muted">
+        <span className="cell-mono muted" title={new Date(item.expiresAt).toISOString()}>
           {status === "active" ? (
-            <span
-              title={new Date(item.expiresAt).toISOString()}
-            >{`${Math.max(1, Math.ceil((item.expiresAt - Date.now()) / 60000))}m ${t("remaining")}`}</span>
+            t("timeLeft", { value: formatRemaining(item.expiresAt, i18n.language) })
           ) : (
-            <Timestamp value={item.expiresAt} />
+            <RelativeTime value={status === "revoked" ? item.revokedAt : item.expiresAt} />
           )}
-        </p>
+        </span>
       </div>
-      <div className="actions">
-        <Button onClick={onEdit}>{t("edit")}</Button>
-        <Confirm
-          disabled={status === "revoked" || action.isPending}
-          label={t("revoke")}
-          onConfirm={() => action.mutate({})}
-        />
+      <div className="td actions">
+        <Button onClick={onEdit}>{t(status === "active" ? "edit" : "renew")}</Button>
+        {status === "active" ? (
+          <Confirm
+            disabled={action.isPending}
+            label={t("revoke")}
+            onConfirm={() => action.mutate({})}
+          />
+        ) : (
+          <span className="action-spacer" aria-hidden="true">
+            <Button className="danger quiet" tabIndex={-1}>
+              {t("revoke")}
+            </Button>
+          </span>
+        )}
       </div>
-      <ErrorBox error={action.error} />
+      {action.error && (
+        <div className="td row-error">
+          <ErrorBox error={action.error} />
+        </div>
+      )}
     </div>
   );
 }
@@ -156,6 +175,20 @@ export function Grants() {
   const { t } = useTranslation();
   const query = useData<Grant[]>("grants");
   const [form, setForm] = useState<Grant | "new" | null>(null);
+  const [view, setView] = useState<"all" | "active" | "inactive">("all");
+  const items = [...(query.data ?? [])].sort(
+    (a, b) =>
+      Number(grantStatus(b) === "active") - Number(grantStatus(a) === "active") ||
+      b.createdAt - a.createdAt,
+  );
+  const counts = {
+    all: items.length,
+    active: items.filter((g) => grantStatus(g) === "active").length,
+    inactive: items.filter((g) => grantStatus(g) !== "active").length,
+  };
+  const visible = items.filter(
+    (g) => view === "all" || (view === "active") === (grantStatus(g) === "active"),
+  );
   return (
     <>
       <PageHeading title={t("grants")} description={t("grantsDesc")}>
@@ -167,18 +200,44 @@ export function Grants() {
       <ErrorBox error={query.error} retry={() => void query.refetch()} />
       {query.isPending ? (
         <Skeleton />
+      ) : items.length ? (
+        <>
+          <div className="toolbar">
+            <fieldset className="segmented" aria-label={t("status")}>
+              {(["all", "active", "inactive"] as const).map((v) => (
+                <button type="button" key={v} aria-pressed={view === v} onClick={() => setView(v)}>
+                  {v === "all" ? t("allPolicies") : t(v)}
+                  <span className="segment-count">{counts[v]}</span>
+                </button>
+              ))}
+            </fieldset>
+          </div>
+          <div className="data-table is-grid t-grants">
+            <TableHead
+              columns={[
+                t("colOrigin"),
+                t("client"),
+                t("colScope"),
+                t("grantedBy"),
+                t("status"),
+                null,
+              ]}
+            />
+            {visible.length ? (
+              visible.map((item) => (
+                <GrantRow key={item.id} item={item} onEdit={() => setForm(item)} />
+              ))
+            ) : (
+              <Empty title={t("grantsNoMatch")} hint={t("grantsEmptyHint")} />
+            )}
+          </div>
+        </>
       ) : (
-        <section className="panel">
-          {query.data?.length ? (
-            query.data.map((item) => (
-              <GrantRow key={item.id} item={item} onEdit={() => setForm(item)} />
-            ))
-          ) : (
-            <Empty>
-              <Button onClick={() => setForm("new")}>{t("newGrant")}</Button>
-            </Empty>
-          )}
-        </section>
+        <div className="data-table">
+          <Empty title={t("grantsEmpty")} hint={t("grantsEmptyHint")}>
+            <Button onClick={() => setForm("new")}>{t("newGrant")}</Button>
+          </Empty>
+        </div>
       )}
       {form && (
         <GrantForm {...(form !== "new" ? { grant: form } : {})} onClose={() => setForm(null)} />
@@ -253,24 +312,29 @@ function TokenRow({ item }: { item: Token }) {
     (_, i) => item.usage.find((u) => u.day === i)?.count ?? 0,
   );
   const max = Math.max(1, ...usage);
+  const status =
+    item.revokedAt !== null
+      ? "revoked"
+      : item.expiresAt !== null && item.expiresAt < Date.now()
+        ? "expired"
+        : "active";
   return (
-    <div className="management-row token-row">
-      <span className="resource-icon">
-        <KeyRound size={18} />
-      </span>
-      <div className="identity">
-        <strong>{item.label}</strong>
-        <p>
-          {t(item.kind)} · <code>{item.scope.join(", ")}</code>
-        </p>
-        <small className="muted">
-          {t("lastUsed")}: <Timestamp value={item.lastUsedAt} />
-        </small>
+    <div className={`tr management-row${status === "active" ? "" : " is-muted"}`}>
+      <div className="td primary">
+        <span className="stack">
+          <strong className="truncate">{item.label}</strong>
+          <span className="muted">{t(item.kind)}</span>
+        </span>
       </div>
-      <div className="token-usage">
-        <small>{t("usage")}</small>
+      <div className="td" data-label={t("colScope")}>
+        <code className="cell-mono truncate" title={item.scope.join(", ")}>
+          {item.scope.join(", ")}
+        </code>
+      </div>
+      <div className="td" data-label={t("usage")}>
         <svg
-          viewBox="0 0 100 25"
+          className="sparkline"
+          viewBox="0 0 98 24"
           role="img"
           aria-label={`${t("usage")}: ${usage.reduce((a, b) => a + b, 0)}`}
         >
@@ -279,35 +343,46 @@ function TokenRow({ item }: { item: Token }) {
             <rect
               key={String(i)}
               x={i * 14}
-              y={24 - (n / max) * 22}
-              width="8"
+              y={24 - Math.max(2, (n / max) * 22)}
+              width="10"
               height={Math.max(2, (n / max) * 22)}
               rx="2"
-              fill="var(--sage)"
+              fill={n ? "var(--chart-1)" : "var(--border)"}
             />
           ))}
         </svg>
       </div>
-      <div>
-        <Pill
-          value={
-            item.revokedAt !== null
-              ? "revoked"
-              : item.expiresAt !== null && item.expiresAt < Date.now()
-                ? "expired"
-                : "active"
-          }
-        />
-        <p className="muted">
-          {item.expiresAt !== null ? <Timestamp value={item.expiresAt} /> : t("noExpiry")}
-        </p>
+      <div className="td" data-label={t("colLastUsed")}>
+        <span className="cell-mono muted">
+          <RelativeTime value={item.lastUsedAt} empty={t("never")} />
+        </span>
       </div>
-      <Confirm
-        disabled={item.revokedAt !== null || action.isPending}
-        label={t("revoke")}
-        onConfirm={() => action.mutate({})}
-      />
-      <ErrorBox error={action.error} />
+      <div className="td status-cell" data-label={t("status")}>
+        <Pill value={status} />
+        <span className="cell-mono muted">
+          {item.expiresAt === null ? t("noExpiry") : <RelativeTime value={item.expiresAt} />}
+        </span>
+      </div>
+      <div className="td actions">
+        {status === "revoked" ? (
+          <span className="action-spacer" aria-hidden="true">
+            <Button className="danger quiet" tabIndex={-1}>
+              {t("revoke")}
+            </Button>
+          </span>
+        ) : (
+          <Confirm
+            disabled={action.isPending}
+            label={t("revoke")}
+            onConfirm={() => action.mutate({})}
+          />
+        )}
+      </div>
+      {action.error && (
+        <div className="td row-error">
+          <ErrorBox error={action.error} />
+        </div>
+      )}
     </div>
   );
 }
@@ -327,16 +402,21 @@ export function Tokens() {
       <ErrorBox error={query.error} retry={() => void query.refetch()} />
       {query.isPending ? (
         <Skeleton />
+      ) : query.data?.length ? (
+        <div className="data-table is-grid t-tokens">
+          <TableHead
+            columns={[t("label"), t("colScope"), t("usage"), t("colLastUsed"), t("status"), null]}
+          />
+          {query.data.map((item) => (
+            <TokenRow key={item.id} item={item} />
+          ))}
+        </div>
       ) : (
-        <section className="panel">
-          {query.data?.length ? (
-            query.data.map((item) => <TokenRow key={item.id} item={item} />)
-          ) : (
-            <Empty>
-              <Button onClick={() => setForm(true)}>{t("newToken")}</Button>
-            </Empty>
-          )}
-        </section>
+        <div className="data-table">
+          <Empty title={t("tokensEmpty")} hint={t("tokensEmptyHint")}>
+            <Button onClick={() => setForm(true)}>{t("newToken")}</Button>
+          </Empty>
+        </div>
       )}
       {form && (
         <TokenForm
@@ -573,41 +653,45 @@ function ResourceRow({ item, onEdit }: { item: Resource; onEdit: () => void }) {
   const { t } = useTranslation();
   const Icon = kindIcons[item.kind];
   return (
-    <div className={item.enabled ? "resource-row" : "resource-row is-disabled"}>
-      <div className="resource-main">
-        <span className="resource-icon" title={t(item.kind)}>
-          <Icon size={16} />
-        </span>
-        <div className="resource-name">
-          <strong className="mono">{item.slug}</strong>
-          <span>
-            {t(item.kind)} · <code>{item.source}</code>
+    <div className={`tr resource-row${item.enabled ? "" : " is-muted"}`}>
+      <div className="td primary">
+        <span className="resource-main">
+          <span className="kind-icon" title={t(item.kind)}>
+            <Icon size={15} />
           </span>
-        </div>
+          <span className="stack">
+            <strong className="mono truncate">{item.slug}</strong>
+            <span className="muted truncate" title={item.source}>
+              {t(item.kind)} · <span className="mono">{item.source}</span>
+            </span>
+          </span>
+        </span>
       </div>
-      <div className="resource-policy">
+      <div className="td" data-label={t("policy")}>
         <PolicyPill policy={item.policy} />
       </div>
-      <div className="resource-stats">
-        <div className="resource-traffic" data-label={t("requests24h")}>
-          <strong className="mono">{item.requests24h ?? "—"}</strong>
+      <div className="td num" data-label={t("requests24h")}>
+        <span className="cell-mono">
+          {item.requests24h ?? "—"}
           {item.denied24h ? (
-            <span className="deny-count">{t("deniedCount", { count: item.denied24h })}</span>
+            <span className="deny-count"> · {t("deniedCount", { count: item.denied24h })}</span>
           ) : null}
-        </div>
-        <div className="resource-last" data-label={t("lastRequest")}>
-          {item.lastRequestAt === undefined ? (
-            <span className="faint">—</span>
-          ) : (
-            <RelativeTime value={item.lastRequestAt} />
-          )}
-        </div>
-        <div className="resource-size mono" data-label={t("size")} title={`SHA-256 ${item.hash}`}>
-          {formatBytes(item.size)}
-        </div>
+        </span>
       </div>
-      <ResourceSwitch item={item} />
-      <div className="resource-actions">
+      <div className="td hide-md" data-label={t("lastRequest")}>
+        <span className="cell-mono muted">
+          {item.lastRequestAt === undefined ? "—" : <RelativeTime value={item.lastRequestAt} />}
+        </span>
+      </div>
+      <div className="td num hide-md" data-label={t("size")}>
+        <span className="cell-mono muted" title={`SHA-256 ${item.hash}`}>
+          {formatBytes(item.size)}
+        </span>
+      </div>
+      <div className="td" data-label={t("status")}>
+        <ResourceSwitch item={item} />
+      </div>
+      <div className="td actions">
         <Button className="quiet" onClick={onEdit}>
           <Pencil size={14} />
           {t("edit")}
@@ -650,9 +734,9 @@ export function Resources() {
         <Skeleton />
       ) : items.length ? (
         <>
-          <div className="resource-toolbar">
+          <div className="toolbar resource-toolbar">
             <div className="search-input">
-              <Search size={16} />
+              <Search size={15} />
               <input
                 aria-label={t("resourceSearch")}
                 placeholder={t("resourceSearch")}
@@ -673,27 +757,29 @@ export function Resources() {
                 </button>
               ))}
             </fieldset>
-            <span className="resource-summary">
+            <span className="toolbar-summary">
               {t("resourceTotal", { count: items.length })} ·{" "}
               {t("resourceEnabled", { count: items.filter((item) => item.enabled).length })}
             </span>
           </div>
-          <section className="panel resource-panel">
-            <div className="resource-head">
-              <span>{t("resourceColumn")}</span>
-              <span>{t("policy")}</span>
-              <span>{t("requests24h")}</span>
-              <span>{t("lastRequest")}</span>
-              <span>{t("size")}</span>
-              <span>{t("status")}</span>
-              <span className="visually-hidden">{t("moreActions")}</span>
-            </div>
+          <div className="data-table is-grid t-resources">
+            <TableHead
+              columns={[
+                t("resourceColumn"),
+                t("policy"),
+                t("requests24h"),
+                t("lastRequest"),
+                t("size"),
+                t("status"),
+                null,
+              ]}
+            />
             {visible.length ? (
               visible.map((item) => (
                 <ResourceRow key={item.id} item={item} onEdit={() => setForm(item)} />
               ))
             ) : (
-              <Empty title={t("resourcesNoMatch")}>
+              <Empty title={t("resourcesNoMatch")} hint={t("emptyHint")}>
                 <Button
                   onClick={() => {
                     setSearch("");
@@ -704,14 +790,14 @@ export function Resources() {
                 </Button>
               </Empty>
             )}
-          </section>
+          </div>
         </>
       ) : (
-        <section className="panel">
+        <div className="data-table">
           <Empty>
             <Button onClick={() => setForm("new")}>{t("newResource")}</Button>
           </Empty>
-        </section>
+        </div>
       )}
       {form && (
         <ResourceForm

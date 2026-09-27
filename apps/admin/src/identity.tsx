@@ -81,8 +81,10 @@ export function IpBadge({ ip, info }: { ip: string; info: IpInfo | null | undefi
   const unresolved = info && info.scope === "public" && info.source === "none";
   return (
     <span className="ip-badge">
-      <code className="ip-address">{ip}</code>
-      <span className="ip-meta">
+      <code className="ip-address" title={ip}>
+        {ip}
+      </code>
+      <span className="ip-meta" title={[place, network].filter(Boolean).join(" · ") || undefined}>
         {info === undefined || unresolved ? null : info === null ? (
           <span className="faint">{t("ipLooking")}</span>
         ) : described ? (
@@ -205,9 +207,15 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-export function RelativeTime({ value }: { value: number | null | undefined }) {
+export function RelativeTime({
+  value,
+  empty,
+}: {
+  value: number | null | undefined;
+  empty?: string;
+}) {
   const { t, i18n } = useTranslation();
-  if (!value) return <span className="faint">{t("noRequestsYet")}</span>;
+  if (!value) return <span className="muted">{empty ?? t("noRequestsYet")}</span>;
   const seconds = Math.round((value - Date.now()) / 1000);
   const abs = Math.abs(seconds);
   const [amount, unit]: [number, Intl.RelativeTimeFormatUnit] =
@@ -242,4 +250,19 @@ export function formatDuration(seconds: number, lang: string): string {
     unit,
     unitDisplay: "short",
   }).format(seconds / size);
+}
+/** Time left until `until`, rounded to a readable unit: "45 min", "3 hr", "2 days". */
+export function formatRemaining(until: number, lang: string, now = Date.now()): string {
+  const minutes = Math.max(1, Math.ceil((until - now) / 60000));
+  const [value, unit]: [number, "minute" | "hour" | "day"] =
+    minutes < 120
+      ? [minutes, "minute"]
+      : minutes < 48 * 60
+        ? [Math.round(minutes / 60), "hour"]
+        : [Math.round(minutes / 1440), "day"];
+  return new Intl.NumberFormat(lang.startsWith("zh") ? "zh-CN" : "en", {
+    style: "unit",
+    unit,
+    unitDisplay: lang.startsWith("zh") ? "long" : "short",
+  }).format(value);
 }

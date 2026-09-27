@@ -53,7 +53,7 @@ export function Overview() {
                 </div>
               ))}
             </div>
-            <section className="panel chart-panel">
+            <section className="section card chart-panel">
               <div className="section-head">
                 <div>
                   <h2>{t("traffic")}</h2>
@@ -98,7 +98,7 @@ export function Overview() {
                       x2="960"
                       y1={y + 8}
                       y2={y + 8}
-                      stroke="var(--line)"
+                      stroke="var(--border)"
                       strokeDasharray="3 5"
                     />
                   ))}
@@ -115,7 +115,7 @@ export function Overview() {
                           width={width * 0.66}
                           height={h}
                           rx="3"
-                          fill="var(--sage)"
+                          fill="var(--chart-1)"
                         />
                         <rect
                           x={i * width + width * 0.17}
@@ -123,7 +123,7 @@ export function Overview() {
                           width={width * 0.66}
                           height={d}
                           rx="2"
-                          fill="var(--brass)"
+                          fill="var(--chart-2)"
                         />
                       </g>
                     );
@@ -152,14 +152,13 @@ export function Overview() {
                   ))}
               </div>
             </section>
-            <section className="panel">
+            <section className="section">
               <div className="section-head">
-                <h2>
-                  {t("needsYou")} <span className="count">{data.pending.length}</span>
-                </h2>
+                <h2>{t("needsYou")}</h2>
+                <span className="count">{data.pending.length}</span>
                 <Link to="/approvals" className="text-link">
                   {t("viewAll")}
-                  <ArrowUpRight size={15} />
+                  <ArrowUpRight size={14} />
                 </Link>
               </div>
               <PendingList items={data.pending.slice(0, 3)} />
@@ -171,32 +170,40 @@ export function Overview() {
                   ["topIps", data.ips],
                 ] as const
               ).map(([label, items]) => (
-                <section className="panel ranking" key={label}>
+                <section className="section ranking" key={label}>
                   <div className="section-head">
                     <h2>{t(label)}</h2>
-                    <span className="muted">{t("today")}</span>
+                    <span className="section-meta">{t("today")}</span>
                   </div>
-                  {items.length ? (
-                    items.map((item, i) => (
-                      <div className="ranking-row" key={item.label}>
-                        <span className="rank">{i + 1}</span>
-                        {label === "topIps" ? (
-                          <IpBadge
-                            ip={item.label}
-                            info={"ipInfo" in item ? item.ipInfo : undefined}
-                          />
-                        ) : (
-                          <span>{item.label}</span>
-                        )}
-                        <div className="mini-meter">
-                          <i style={{ width: `${(item.count / (items[0]?.count ?? 1)) * 100}%` }} />
+                  <div className="data-table is-grid t-rank">
+                    {items.length ? (
+                      items.map((item, i) => (
+                        <div className="tr ranking-row" key={item.label}>
+                          <span className="rank cell-mono">{i + 1}</span>
+                          <span className="rank-label">
+                            {label === "topIps" ? (
+                              <IpBadge
+                                ip={item.label}
+                                info={"ipInfo" in item ? item.ipInfo : undefined}
+                              />
+                            ) : (
+                              <span className="cell-mono">{item.label}</span>
+                            )}
+                          </span>
+                          <span className="mini-meter" aria-hidden="true">
+                            <i
+                              style={{ width: `${(item.count / (items[0]?.count ?? 1)) * 100}%` }}
+                            />
+                          </span>
+                          <strong className="cell-mono num">
+                            {item.count.toLocaleString(i18n.language)}
+                          </strong>
                         </div>
-                        <strong className="mono">{item.count}</strong>
-                      </div>
-                    ))
-                  ) : (
-                    <Empty />
-                  )}
+                      ))
+                    ) : (
+                      <Empty title={t("rankEmpty")} hint={t("rankEmptyHint")} />
+                    )}
+                  </div>
                 </section>
               ))}
             </div>
