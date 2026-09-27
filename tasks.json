@@ -35,6 +35,19 @@
     "evidence": "Docker build exit 0; compose healthy with repository bind mount (Docker VM disk full); /healthz 200; uid=1000; nginx -t successful"
   },
   {
+    "id": "clean-tests",
+    "task": "Run server tests before any compiled core artifact exists",
+    "verification": "Fresh install then recursive tests and build from absent dist directories",
+    "passes": true,
+    "evidence": "Moved all dist directories aside; pnpm install && pnpm -r test && pnpm -r build exit 0 (228 Vitest tests plus admin typecheck)"
+  },
+  {
+    "id": "revocation-edge",
+    "task": "Reject tokens revoked at Unix epoch zero",
+    "verification": "Decision matrix includes revokedAt=0 for GET, HEAD, Range and conditional GET",
+    "passes": false
+  },
+  {
     "id": "acceptance",
     "task": "Adversarial final verification and identifier scan",
     "verification": "pnpm install && pnpm -r test && pnpm -r build; pnpm lint; requested grep is empty",
