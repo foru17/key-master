@@ -161,6 +161,30 @@ describe("gateway", () => {
   });
 });
 describe("resource safety", () => {
+  it("audits an upstream body failure with the final status and request ID", async () => {
+    store.db
+      .update(schema.resources)
+      .set({ kind: "upstream", source: "https://example.com/resource" })
+      .where(eq(schema.resources.slug, "/public"))
+      .run();
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.error(new Error("Connection reset"));
+          },
+        }),
+      ),
+    );
+    const response = await get("/public", {}, app({ fetcher }));
+    expect(response.status).toBe(502);
+    const row = store.db.select().from(schema.requests).get();
+    expect(row?.id).toBe(response.headers.get("x-request-id"));
+    expect(row?.status).toBe(502);
+    expect(response.headers.has("content-length")).toBe(false);
+    expect(response.headers.has("etag")).toBe(false);
+    expect(row?.bytes).toBe(new TextEncoder().encode(await response.text()).length);
+  });
   it.each(["file.txt", "../outside.txt", "link.txt"])("root containment %s", async (source) => {
     mkdirSync(resolve(temp, "files"));
     writeFileSync(resolve(temp, "files/file.txt"), "SAFE_FILE");

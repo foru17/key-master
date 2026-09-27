@@ -52,6 +52,13 @@
     "id": "stream-audit",
     "task": "Keep request IDs and audit rows when an upstream response body fails",
     "verification": "Mock response stream failure produces audited 502 with X-Request-Id",
+    "passes": true,
+    "evidence": "Server Vitest: 65 passed; TypeScript build exit 0"
+  },
+  {
+    "id": "device-links",
+    "task": "Deliver every issued device link without truncating Telegram messages",
+    "verification": "Mock delivery of more than 4096 characters of scoped URLs preserves every link",
     "passes": false
   },
   {

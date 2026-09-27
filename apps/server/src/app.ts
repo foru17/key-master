@@ -68,7 +68,32 @@ export function createApp(options: {
     c.header("X-Request-Id", id);
     if (c.req.method === "HEAD" && c.res.body)
       c.res = new Response(null, { status: c.res.status, headers: c.res.headers });
-    const body = c.res.body ? new Uint8Array(await c.res.clone().arrayBuffer()) : new Uint8Array();
+    let body: Uint8Array<ArrayBuffer>;
+    try {
+      body = c.res.body ? new Uint8Array(await c.res.arrayBuffer()) : new Uint8Array();
+      c.res = new Response(
+        c.req.method === "HEAD" || [204, 205, 304].includes(c.res.status) ? null : body,
+        { status: c.res.status, headers: c.res.headers },
+      );
+    } catch {
+      for (const name of [
+        "content-length",
+        "etag",
+        "last-modified",
+        "content-range",
+        "accept-ranges",
+      ])
+        c.res.headers.delete(name);
+      body = new TextEncoder().encode("Resource unavailable / 资源暂不可用\n");
+      c.res = new Response(body, {
+        status: 502,
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Cache-Control": "no-store",
+          "X-Request-Id": id,
+        },
+      });
+    }
     store.db
       .insert(schema.requests)
       .values({
