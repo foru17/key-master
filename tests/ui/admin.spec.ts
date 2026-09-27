@@ -116,6 +116,7 @@ for (const width of [1440, 390])
       await shot("login");
       await login(page);
       await expect(page.locator(".stat").first()).toBeVisible();
+      await expect(page.locator(".chart-labels time:visible")).toHaveCount(width === 390 ? 3 : 6);
       await shot("overview");
       await page.goto("/admin/requests?q=EXAMPLE_PENDING_REQUEST");
       const row =
