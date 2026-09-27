@@ -1,11 +1,13 @@
 import type { IncomingMessage } from "node:http";
+import { hashToken } from "@key-master/core";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { restoreSettings } from "./admin.js";
 import { createApp } from "./app.js";
 import { createLoginCode } from "./auth.js";
 import { type Config, configSchema } from "./config.js";
-import { openStore, type Store, setState, syncResources } from "./db.js";
+import { openStore, type Store, setState, syncResources, syncTokens } from "./db.js";
+import { ingestLine } from "./ingest.js";
 import * as schema from "./schema.js";
 
 let store: Store;
@@ -371,4 +373,54 @@ it("legacy settings retain the configured notice timezone", () => {
   );
   restoreSettings(store, config);
   expect(config.notice.timezone).toBe("Asia/Singapore");
+});
+
+it("lists imported tokens and correlates nginx audit without exposing hashes", async () => {
+  config.tokens = configSchema.parse({
+    tokens: [
+      {
+        id: "example-nginx-token",
+        label: "Example imported integration",
+        kind: "machine",
+        scope: ["/private"],
+        secret_sha256: hashToken("EXAMPLE_EXTERNAL_TOKEN"),
+      },
+    ],
+  }).tokens;
+  syncTokens(store, config, now);
+  expect(
+    ingestLine(
+      store,
+      JSON.stringify({
+        time_iso8601: new Date(now).toISOString(),
+        remote_addr: "203.0.113.8",
+        request_method: "GET",
+        uri: "/private",
+        status: 200,
+        body_bytes_sent: 12,
+        request_time: 0.01,
+        km_source: "direct",
+        km_token_id: "example-nginx-token",
+      }),
+    ),
+  ).toBe(true);
+  const response = await req("admin/tokens");
+  expect(response.status).toBe(200);
+  const body = await response.text();
+  expect(body).not.toContain(hashToken("EXAMPLE_EXTERNAL_TOKEN"));
+  expect(body).not.toContain("EXAMPLE_EXTERNAL_TOKEN");
+  expect(JSON.parse(body)).toContainEqual(
+    expect.objectContaining({
+      id: "example-nginx-token",
+      label: "Example imported integration",
+      usage: expect.arrayContaining([expect.objectContaining({ count: 1 })]),
+    }),
+  );
+  const audit = store.db
+    .select()
+    .from(schema.requests)
+    .where(eq(schema.requests.source, "nginx"))
+    .get();
+  const details = await req(`admin/requests/${audit?.id}`);
+  expect(await details.json()).toMatchObject({ tokenId: "example-nginx-token", source: "nginx" });
 });

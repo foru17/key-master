@@ -3,13 +3,14 @@ import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
 import { HttpTelegramApi, TelegramBot } from "./bot/telegram.js";
 import { loadConfig } from "./config.js";
-import { openStore, syncResources } from "./db.js";
+import { openStore, syncResources, syncTokens } from "./db.js";
 import { tailNginx } from "./ingest.js";
 
 const { config, secrets } = loadConfig(process.env.KM_CONFIG ?? "config.yaml");
 mkdirSync(config.file_root, { recursive: true });
 const store = openStore(config.db_path);
 syncResources(store, config);
+syncTokens(store, config);
 const enabled =
   secrets.telegramToken !== "" &&
   secrets.telegramToken !== "YOUR_BOT_TOKEN" &&

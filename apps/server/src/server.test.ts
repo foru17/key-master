@@ -9,11 +9,12 @@ import {
 } from "node:fs";
 import type { IncomingMessage } from "node:http";
 import { resolve } from "node:path";
+import { hashToken } from "@key-master/core";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "./app.js";
 import { type Config, configSchema, loadConfig } from "./config.js";
-import { issueToken, openStore, type Store, syncResources } from "./db.js";
+import { issueToken, openStore, type Store, syncResources, syncTokens } from "./db.js";
 import { ingestLine, tailNginx } from "./ingest.js";
 import { clientIp } from "./ip.js";
 import * as schema from "./schema.js";
@@ -278,6 +279,25 @@ describe("nginx ingestion", () => {
     http_user_agent: "curl/8",
     km_source: "direct",
   });
+  it.each([
+    [undefined, null],
+    ["", null],
+    ["-", null],
+    ["example-nginx-token", "example-nginx-token"],
+    ["example-unknown", "example-unknown"],
+  ])("associates optional token ID %s", (km_token_id, expected) => {
+    expect(ingestLine(store, JSON.stringify({ ...JSON.parse(entry), km_token_id }))).toBe(true);
+    const row = store.db.select().from(schema.requests).get();
+    expect(row?.tokenId).toBe(expected);
+    expect(JSON.stringify(row)).not.toContain("TEST_TOKEN");
+  });
+  it.each([12, "invalid/id", "x".repeat(201)])(
+    "rejects malformed token label %s",
+    (km_token_id) => {
+      expect(ingestLine(store, JSON.stringify({ ...JSON.parse(entry), km_token_id }))).toBe(false);
+      expect(store.db.select().from(schema.requests).all()).toHaveLength(0);
+    },
+  );
   it("redacts query, imports source and skips invalid/proxied rows", () => {
     expect(ingestLine(store, entry)).toBe(true);
     expect(ingestLine(store, "invalid")).toBe(false);
@@ -320,5 +340,40 @@ describe("notice timezone", () => {
     expect(body).toContain("(Asia/Singapore)");
     expect(body).toContain(`title="${new Date(now).toISOString()}"`);
     expect(body).toContain("访问需要管理员批准");
+  });
+});
+
+describe("imported machine token authorization", () => {
+  it.each([
+    ["valid", ["/private"], now + 1, null, 200],
+    ["wildcard", ["*"], undefined, null, 200],
+    ["expired", ["/private"], now, null, 403],
+    ["wrong scope", ["/other"], undefined, null, 403],
+    ["revoked", ["/private"], undefined, now - 1, 403],
+  ] as const)("honors %s", async (_name, scope, expires_at, revokedAt, status) => {
+    config.tokens = configSchema.parse({
+      tokens: [
+        {
+          id: "example-import",
+          label: "Example import",
+          kind: "machine",
+          secret_sha256: hashToken("EXAMPLE_EXTERNAL_TOKEN", "EXAMPLE_PEPPER"),
+          scope,
+          expires_at,
+        },
+      ],
+    }).tokens;
+    syncTokens(store, config, now);
+    store.db.update(schema.tokens).set({ revokedAt }).run();
+    syncTokens(store, config, now + 1);
+    const instance = app({ secrets: { ...secrets, tokenPepper: "EXAMPLE_PEPPER" } });
+    const response = await get("/private?k=EXAMPLE_EXTERNAL_TOKEN", {}, instance);
+    expect(response.status).toBe(status);
+    const row = store.db.select().from(schema.requests).get();
+    expect(row?.tokenId).toBe(status === 200 ? "example-import" : null);
+    expect(store.db.select().from(schema.tokens).get()?.lastUsedAt).toBe(
+      status === 200 ? now : null,
+    );
+    expect(JSON.stringify(row)).not.toContain("EXAMPLE_EXTERNAL_TOKEN");
   });
 });

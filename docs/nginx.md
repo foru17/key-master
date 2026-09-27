@@ -7,9 +7,13 @@ Machine tokens explicitly mapped in nginx can serve an immutable local resource 
 Put the following in the `http` context. The map includes the URI to scope the token to one exact resource. A location alias supplies the fixed file; the request never controls a filesystem path.
 
 ```nginx
-map "$uri:$arg_k" $km_direct {
-    default 0;
-    "/resource.txt:YOUR_MACHINE_TOKEN" 1;
+map "$uri:$arg_k" $km_token_id {
+    default "";
+    "/resource:YOUR_MACHINE_TOKEN" "example-nginx-token";
+}
+map $km_token_id $km_direct {
+    "" 0;
+    default 1;
 }
 map $km_direct $km_source {
     default proxy;
@@ -28,6 +32,7 @@ log_format key_master_json escape=json
     '"body_bytes_sent":$body_bytes_sent,'
     '"request_time":$request_time,'
     '"http_user_agent":"$http_user_agent",'
+    '"km_token_id":"$km_token_id",'
     '"km_source":"$km_source"}';
 
 upstream key_master_app {
@@ -47,7 +52,7 @@ server {
         return 404 "404 Not Found\n";
     }
 
-    location = /resource.txt {
+    location = /resource {
         error_page 418 = @gatekeeper;
         if ($km_direct = 0) { return 418; }
         alias /srv/resources/resource.txt;
@@ -87,12 +92,25 @@ ingest:
   nginx_log: data/nginx-access.jsonl
 notice:
   not_found_body: "404 Not Found\n"
+tokens:
+  - id: example-nginx-token
+    label: Example nginx integration
+    secret_sha256: "YOUR_64_CHARACTER_SHA256_HEX"
+    scope: [/resource]
+    kind: machine
+    # expires_at: "2027-01-01T00:00:00Z"
 resources:
-  - slug: /resource.txt
+  - slug: /resource
     kind: file
     source: resource.txt
     policy: approval
 ```
+
+Replace `YOUR_64_CHARACTER_SHA256_HEX` locally with the 64-character SHA-256 digest of the existing token. With `KM_TOKEN_PEPPER`, hash the UTF-8 concatenation `pepper + token` (no separator), matching the application verifier. Keep plaintext only in the protected nginx map / local secret environment, never in `config.yaml` or SQLite. Hashes do not reveal the original token in the admin API.
+
+On startup, `tokens` are upserted by `id`: label, hash, scope, kind and expiry follow YAML; created/last-used/revoked timestamps are preserved. Removing a YAML entry does not delete it, and restarting does not un-revoke it. Optional expiry accepts an ISO timestamp with an explicit zone or Unix milliseconds; omitting it removes the configured expiry. Changes require a restart. nginx still authorizes independently: app expiry, scope changes and revocation do not alter nginx's map.
+
+The map above emits a fixed, non-secret label in `$km_token_id`, identical to the imported token `id`. The log parser copies it into audit `token_id` so Requests details and Tokens usage can be associated. Older logs without the field (or with empty / `-` values) remain supported and use null. Unknown IDs are retained for later correlation; the log label never grants access. Do not derive the label from a request header or log the secret itself.
 
 Mount the same file content under the app's `file_root`. Mount the JSON log read-only at the configured ingest path; ensure the unprivileged app user can read it. Do not log `$request`, `$request_uri`, `$args` or `$arg_k`: those expose plaintext tokens. The ingest parser also removes query strings defensively.
 

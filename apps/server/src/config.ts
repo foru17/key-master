@@ -36,6 +36,29 @@ export const resourceSchema = z
     if (resource.kind === "upstream" && !httpUrl.safeParse(resource.source).success)
       ctx.addIssue({ code: "custom", path: ["source"], message: "Upstream must be HTTP(S)" });
   });
+export const machineTokenSchema = z.strictObject({
+  id: z
+    .string()
+    .min(1)
+    .max(200)
+    .regex(/^[A-Za-z0-9_-]+$/),
+  label: z.string().min(1).max(200),
+  secret_sha256: z
+    .string()
+    .regex(/^[a-fA-F0-9]{64}$/)
+    .transform((value) => value.toLowerCase()),
+  scope: z
+    .array(z.string().regex(/^(\*|\/[A-Za-z0-9_/-]+)$/))
+    .min(1)
+    .max(100),
+  kind: z.literal("machine"),
+  expires_at: z
+    .union([
+      z.number().int().nonnegative().max(8640000000000000),
+      z.iso.datetime({ offset: true }).transform((value) => Date.parse(value)),
+    ])
+    .optional(),
+});
 export const configSchema = z
   .object({
     public_base_url: httpUrl.default("https://example.com"),
@@ -98,11 +121,14 @@ export const configSchema = z
         footer: "",
         not_found_body: "404 Not Found\n",
       }),
+    tokens: z.array(machineTokenSchema).max(10000).default([]),
     resources: z.array(resourceSchema).max(10000).default([]),
     ingest: z.object({ nginx_log: z.string().optional() }).default({}),
     admin: z.object({ allowed_cidrs: cidrs.default([]) }).default({ allowed_cidrs: [] }),
   })
   .superRefine((config, ctx) => {
+    if (new Set(config.tokens.map((t) => t.id)).size !== config.tokens.length)
+      ctx.addIssue({ code: "custom", path: ["tokens"], message: "Duplicate token id" });
     if (new Set(config.resources.map((r) => r.slug)).size !== config.resources.length)
       ctx.addIssue({ code: "custom", path: ["resources"], message: "Duplicate resource slug" });
     if (

@@ -135,6 +135,8 @@ Every application response, including health/admin/error responses, has a ULID r
 
 ## Design notes
 
+- Config `tokens[]` imports existing machine tokens by stable `id` at startup. Only `secret_sha256` is accepted; hash UTF-8 `KM_TOKEN_PEPPER + token` when pepper is configured. Configured label/hash/scope/kind/expiry overwrite those DB fields; created/last-used/revoked timestamps survive upserts. Omitted expiry means no expiry; an expiry may be a zoned ISO string or Unix milliseconds. Removing an entry does not delete/revoke it. nginx remains an independent authorization plane; its fixed `km_token_id` log label links audit rows to imported tokens without logging plaintext. See [nginx import example](docs/nginx.md).
+
 - Admin timestamps use the browser local timezone and selected language, include year/seconds, and expose ISO values on hover. Chart axes stay compact. Server denial pages and their settings previews use `notice.timezone` (validated IANA name, default `UTC`) and label the zone. Persisted UI settings override YAML, including the timezone; legacy settings without a timezone inherit the configured value.
 
 - `docs/DESIGN.md` is the visual contract. Light brass foreground/background alone yields only 4.01:1, so count badges use the existing ink token over brass. Muted rather than faint is used for text and placeholders. Server denial HTML and the SPA import the same theme token source.

@@ -26,6 +26,16 @@ notice:
   contact_url: ""
   footer: ""
   not_found_body: "404 Not Found\n"
+# Existing machine tokens: SHA-256 only, never put a plaintext secret here.
+# Hash UTF-8 KM_TOKEN_PEPPER + token when a pepper is configured (no separator).
+tokens: []
+# tokens:
+#   - id: example-nginx-token
+#     label: Example nginx integration
+#     secret_sha256: "YOUR_64_CHARACTER_SHA256_HEX"
+#     scope: [/private]
+#     kind: machine
+#     expires_at: "2027-01-01T00:00:00Z" # Optional ISO timestamp with zone, or Unix milliseconds.
 resources:
   - slug: /welcome
     kind: inline

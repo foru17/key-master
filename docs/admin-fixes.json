@@ -24,7 +24,8 @@
     "id": "tokens",
     "task": "Import hashed machine tokens at startup and associate nginx audit token IDs",
     "verification": "Vitest validation, startup upsert, authorization, admin visibility and ingest cases",
-    "passes": false
+    "passes": true,
+    "evidence": "Vitest: 175 core + 158 server passed; recursive build and lint exit 0. Production entrypoint startup/restart smoke: health 200, imported token 200, revoked token 403 after restart, one row, lifecycle timestamps preserved."
   },
   {
     "id": "acceptance",

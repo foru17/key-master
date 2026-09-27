@@ -15,6 +15,11 @@ const entrySchema = z.object({
   request_time: z.coerce.number().nonnegative(),
   http_user_agent: z.string().default(""),
   km_source: z.literal("direct"),
+  km_token_id: z
+    .string()
+    .max(200)
+    .regex(/^[A-Za-z0-9_-]*$/)
+    .optional(),
 });
 export function ingestLine(store: Store, line: string): boolean {
   try {
@@ -40,6 +45,7 @@ export function ingestLine(store: Store, line: string): boolean {
         bytes: entry.body_bytes_sent,
         latencyMs: Math.round(entry.request_time * 1000),
         source: "nginx",
+        tokenId: entry.km_token_id && entry.km_token_id !== "-" ? entry.km_token_id : null,
       })
       .run();
     return true;

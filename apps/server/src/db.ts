@@ -51,6 +51,23 @@ export function syncResources(store: Store, config: Config, now = Date.now()) {
         .run();
   });
 }
+export function syncTokens(store: Store, config: Config, now = Date.now()) {
+  store.db.transaction((tx) => {
+    for (const token of config.tokens) {
+      const value = {
+        label: token.label,
+        secretHash: token.secret_sha256,
+        scope: token.scope,
+        kind: token.kind,
+        expiresAt: token.expires_at ?? null,
+      };
+      tx.insert(schema.tokens)
+        .values({ id: token.id, ...value, createdAt: now })
+        .onConflictDoUpdate({ target: schema.tokens.id, set: value })
+        .run();
+    }
+  });
+}
 export function issueToken(
   store: Store,
   input: { label: string; scope: string[]; kind: "machine" | "device"; expiresAt?: number | null },

@@ -31,6 +31,9 @@ config.example.yaml, .env.example, Dockerfile, docker-compose.yml, README.md (En
   enabled, created_at, updated_at. Resources can also be declared in `config.yaml` (synced to DB at boot).
 - `tokens`: id, label, secret_hash (sha256 hex), scope (JSON array of slugs or `["*"]`), kind (`machine` | `device`),
   expires_at (nullable), last_used_at, revoked_at, created_at. The plaintext is shown once at creation.
+  Config `tokens[]` imports `{id, label, secret_sha256, scope, kind: machine, expires_at?}` at boot, upserting
+  by id while preserving created/last-used/revoked timestamps. SHA-256 hex only; no plaintext. Expiry accepts
+  zoned ISO timestamps or Unix milliseconds. Removal from config does not delete the DB entry.
 - `grants`: id, subject_kind (`ip` | `ip_client`), subject (IP or `IP|client_family`), scope (slugs or `*`),
   granted_by (`telegram:<user id>` | `admin:<user>` | `command`), expires_at, revoked_at, created_at.
 - `requests` (append-only audit): id (ULID, also shown to the caller as request id), ts, ip, ua, client_family,
@@ -100,8 +103,9 @@ the user's nodes. Always non-2xx so clients keep the cached copy.
 ## Nginx front (docs/nginx.md, example only)
 
 Token paths are served by nginx directly (no dependency on key-master); nginx writes a JSON access log that
-key-master ingests (`ingest.nginx_log`) so audit also covers token-served requests (`source = nginx`). Requests
-without a valid token are proxied to key-master. Provide the example config with placeholder names.
+key-master ingests (`ingest.nginx_log`) so audit also covers token-served requests (`source = nginx`).
+An optional fixed `km_token_id` log label is copied to audit `token_id` (missing/empty/`-` becomes null).
+Requests without a valid token are proxied to key-master. Provide the example config with placeholder names.
 
 ## Config
 
@@ -109,7 +113,7 @@ without a valid token are proxied to key-master. Provide the example config with
 `KM_TOKEN_PEPPER` (optional). Keys: `public_base_url`, `listen`, `db_path`, `file_root`, `internal_cidrs`,
 `trusted_proxies` (for X-Forwarded-For / X-Real-IP), `observe_mode` (allow everything, still notify + audit),
 `telegram.{mode, owner_chat_ids, webhook_secret}`, `durations.{grant_default, options, block}`,
-`notice.{contact_text, contact_url, footer, timezone}`, `resources[]`, `ingest.nginx_log`, `admin.allowed_cidrs`.
+`notice.{contact_text, contact_url, footer, timezone}`, `resources[]`, `tokens[]`, `ingest.nginx_log`, `admin.allowed_cidrs`.
 
 ## Acceptance (automated where possible)
 
