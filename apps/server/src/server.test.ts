@@ -12,7 +12,7 @@ import { resolve } from "node:path";
 import { hashToken } from "@key-master/core";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createApp } from "./app.js";
+import { createApp, isAuditNoise } from "./app.js";
 import { type Config, configSchema, loadConfig } from "./config.js";
 import { issueToken, openStore, type Store, syncResources, syncTokens } from "./db.js";
 import { ingestLine, tailNginx } from "./ingest.js";
@@ -136,14 +136,24 @@ describe("gateway", () => {
     );
     expect(response.status).toBe(403);
   });
-  it("health is audited", async () => {
+  it("health is not audited", async () => {
     const response = await get("/healthz");
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ status: "ok" });
-    expect(store.db.select().from(schema.requests).all()).toHaveLength(1);
+    expect(store.db.select().from(schema.requests).all()).toHaveLength(0);
+  });
+  it.each([
+    ["GET", "/healthz", null, true],
+    ["GET", "/admin/assets/index.js", null, true],
+    ["GET", "/api/admin/events", null, true],
+    ["POST", "/api/admin/grants", null, false],
+    ["GET", "/private", "/private", false],
+    ["GET", "/nope", null, false],
+  ])("audit noise %s %s", (method, path, slug, noise) => {
+    expect(isAuditNoise(method, path, slug)).toBe(noise);
   });
   it("audit is append-only", async () => {
-    await get("/healthz");
+    await get("/private");
     expect(() => store.sqlite.exec("DELETE FROM requests")).toThrow("append-only");
     expect(() => store.sqlite.exec("UPDATE requests SET status=200")).toThrow("append-only");
   });

@@ -97,32 +97,33 @@ export function createApp(options: {
         },
       });
     }
-    store.db
-      .insert(schema.requests)
-      .values({
-        id,
-        ts: started,
-        ip,
-        ua,
-        headers: Object.fromEntries(
-          ["accept", "accept-language", "range", "if-none-match"].flatMap((name) => {
-            const value = c.req.header(name);
-            return value ? [[name, value.slice(0, 512)]] : [];
-          }),
-        ),
-        clientFamily: c.get("family"),
-        method: c.req.method,
-        path: c.req.path,
-        resourceSlug: c.get("resourceSlug"),
-        decision: c.get("decision"),
-        tokenId: c.get("tokenId"),
-        grantId: c.get("grantId"),
-        status: c.res.status,
-        bytes: body.length,
-        latencyMs: Math.max(0, clock() - started),
-        source: "app",
-      })
-      .run();
+    if (!isAuditNoise(c.req.method, c.req.path, c.get("resourceSlug")))
+      store.db
+        .insert(schema.requests)
+        .values({
+          id,
+          ts: started,
+          ip,
+          ua,
+          headers: Object.fromEntries(
+            ["accept", "accept-language", "range", "if-none-match"].flatMap((name) => {
+              const value = c.req.header(name);
+              return value ? [[name, value.slice(0, 512)]] : [];
+            }),
+          ),
+          clientFamily: c.get("family"),
+          method: c.req.method,
+          path: c.req.path,
+          resourceSlug: c.get("resourceSlug"),
+          decision: c.get("decision"),
+          tokenId: c.get("tokenId"),
+          grantId: c.get("grantId"),
+          status: c.res.status,
+          bytes: body.length,
+          latencyMs: Math.max(0, clock() - started),
+          source: "app",
+        })
+        .run();
     const pending = c.get("pending");
     if (pending && !options.bot) recordPending(store, config, pending);
     if (pending && options.bot) {
@@ -263,4 +264,14 @@ export function createApp(options: {
     }
   });
   return app;
+}
+
+/** Health probes, admin static files and admin read polling would drown the audit trail. */
+export function isAuditNoise(method: string, path: string, resourceSlug: string | null): boolean {
+  if (resourceSlug) return false;
+  if (path === "/healthz") return true;
+  const read = method === "GET" || method === "HEAD";
+  return (
+    read && (path === "/admin" || path.startsWith("/admin/") || path.startsWith("/api/admin/"))
+  );
 }
