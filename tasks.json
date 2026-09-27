@@ -31,7 +31,8 @@
     "id": "delivery",
     "task": "Docker, compose, examples, English documentation, MIT license",
     "verification": "Docker build and compose healthcheck with example environment",
-    "passes": false
+    "passes": true,
+    "evidence": "Docker build exit 0; compose healthy with repository bind mount (Docker VM disk full); /healthz 200; uid=1000; nginx -t successful"
   },
   {
     "id": "acceptance",

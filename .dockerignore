@@ -1,0 +1,16 @@
+.git
+node_modules
+**/node_modules
+**/dist
+.env
+.env.*
+!.env.example
+config.yaml
+**/*.db
+**/*.db-*
+data
+.verification
+.ui-acceptance
+**/.test-data
+coverage
+*.log

@@ -1,0 +1,23 @@
+services:
+  key-master:
+    build: .
+    image: key-master:local
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      KM_TELEGRAM_TOKEN: ${KM_TELEGRAM_TOKEN:-YOUR_BOT_TOKEN}
+      KM_SESSION_SECRET: ${KM_SESSION_SECRET:-YOUR_SESSION_SECRET_REPLACE_WITH_32_RANDOM_CHARACTERS}
+      KM_TOKEN_PEPPER: ${KM_TOKEN_PEPPER:-}
+    ports:
+      - "127.0.0.1:${KM_PORT:-3000}:3000"
+    volumes:
+      - ./config.example.yaml:/app/config.yaml:ro
+      - ${KM_DATA_DIR:-key-master-data}:/app/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+volumes:
+  key-master-data:

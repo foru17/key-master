@@ -7,7 +7,10 @@ import { z } from "zod";
 const cidrs = z.array(z.string().refine(validCidr, "Invalid CIDR"));
 const httpUrl = z
   .url()
-  .refine((value) => ["http:", "https:"].includes(new URL(value).protocol), "HTTP(S) required");
+  .refine(
+    (value) => URL.canParse(value) && ["http:", "https:"].includes(new URL(value).protocol),
+    "HTTP(S) required",
+  );
 export const resourceSchema = z
   .object({
     slug: z

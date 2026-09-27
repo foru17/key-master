@@ -1,0 +1,53 @@
+public_base_url: https://example.com
+listen:
+  host: 0.0.0.0
+  port: 3000
+db_path: data/key-master.db
+file_root: data/files
+internal_cidrs: []
+trusted_proxies: []
+observe_mode: false
+telegram:
+  mode: polling
+  owner_chat_ids: [] # Add quoted numeric owner chat IDs to enable approvals.
+  max_polls: 10000 # Hard limit per process; restart to resume after reaching it.
+  webhook_secret: ""
+  # webhook_path: /_telegram/YOUR_RANDOM_SECRET_PATH_VALUE
+bot:
+  lang: en # en | zh
+durations:
+  grant_default: 600
+  options: [600, 3600]
+  block: 3600
+  pending: 600
+notice:
+  contact_text: "Please contact the administrator / 请联系管理员"
+  contact_url: ""
+  footer: ""
+  not_found_body: "404 Not Found\n"
+resources:
+  - slug: /welcome
+    kind: inline
+    source: "Welcome to key-master / 欢迎使用 key-master\n"
+    content_type: "text/plain; charset=utf-8"
+    policy: public
+    enabled: true
+  - slug: /private
+    kind: inline
+    source: "YOUR_PRIVATE_RESOURCE_CONTENT\n"
+    content_type: "text/plain; charset=utf-8"
+    policy: approval
+    enabled: true
+  # - slug: /file
+  #   kind: file
+  #   source: resource.txt
+  #   policy: token_only
+  # - slug: /upstream
+  #   kind: upstream
+  #   source: https://example.com/resource.txt
+  #   policy: approval
+ingest: {}
+# ingest:
+#   nginx_log: data/nginx-access.jsonl
+admin:
+  allowed_cidrs: [127.0.0.1/32, "::1/128"]

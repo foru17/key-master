@@ -219,6 +219,14 @@ describe("proxy trust", () => {
   );
 });
 describe("config", () => {
+  it("loads the full example including an empty contact URL", () => {
+    const loaded = loadConfig(resolve("../../config.example.yaml"), {
+      KM_SESSION_SECRET: secrets.sessionSecret,
+    });
+    expect(loaded.config.notice.contact_url).toBe("");
+    expect(loaded.config.resources).toHaveLength(2);
+    expect(configSchema.safeParse({ public_base_url: "invalid" }).success).toBe(false);
+  });
   it.each([
     { internal_cidrs: ["invalid"] },
     { listen: { port: 0 } },
