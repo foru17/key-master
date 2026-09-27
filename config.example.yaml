@@ -36,6 +36,23 @@ tokens: []
 #     scope: [/private]
 #     kind: machine
 #     expires_at: "2027-01-01T00:00:00Z" # Optional ISO timestamp with zone, or Unix milliseconds.
+# Trusted networks: active until revoked; IPv4 CIDRs /24 or narrower, IPv6 /48 or narrower.
+allowlist: []
+# allowlist:
+#   - id: example-home
+#     label: Example home broadband
+#     value: home.example.com
+#     scope: ["*"] # Optional; defaults to all resources.
+# For a custom refresh interval, use the object form instead:
+# allowlist:
+#   resolve_interval_s: 300 # 60–86400 seconds; A + AAAA, last good snapshot kept on failure.
+#   entries:
+#     - id: example-network
+#       label: Example fixed network
+#       value: 203.0.113.0/24
+#     - id: example-ipv6
+#       label: Example IPv6 network
+#       value: "2001:db8:1::/48"
 resources:
   - slug: /welcome
     kind: inline

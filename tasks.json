@@ -101,6 +101,7 @@
     "id": "allowlist-delivery",
     "task": "Specification, README and adversarial acceptance",
     "verification": "pnpm -r test && pnpm -r build && pnpm lint; identifier scan",
-    "passes": false
+    "passes": true,
+    "evidence": "pnpm -r test: 271 core + 247 server passed, admin typecheck passed; pnpm -r build exit 0; pnpm lint exit 0 (64 files); pnpm test:ui 13 passed; identifier diff has no real addresses/names; config and 2 README YAML examples parsed; curl /healthz returned status ok; prior migrations/compose unchanged"
   }
 ]

@@ -59,3 +59,20 @@ verified by fresh screenshots plus explicit button-bound checks. No remaining mi
   drawer displays the matched label, value and id, with a green semantic pill.
 - agent-browser independently clicked add/save, remove/cancel/confirm, Overview and request quick actions.
 - Existing login, bilingual themes, grant/token/resource CRUD, rollback, timezone and navigation tests pass.
+
+## Final verification
+
+- `pnpm -r test && pnpm -r build && pnpm lint`: exit 0; 271 core tests, 247 server tests, admin typecheck,
+  all builds passed; Biome checked 64 files (one pre-existing deprecation info, no errors).
+- `pnpm test:ui`: 13 passed, including fresh action-bound checks after the phone clipping fixes.
+- `curl --fail --silent --show-error http://localhost:4173/healthz`: `{"status":"ok"}`.
+- Example config and both README YAML examples parsed with the built Zod configuration schema.
+- Requested identifier grep saved to `.verification/allowlist-identifier-scan.txt`. Diff scan against `80f074d`
+  found only documentation IPv4 addresses, loopback, and the deliberately invalid `999.1.1.1` validation case;
+  no new real addresses or private infrastructure names. Report: `.verification/allowlist-added-identifiers.json`.
+- `git diff --check`: exit 0. Existing SQL migrations and `docker-compose.yml` have no changes.
+
+Adversarial review: revoked-at-zero entries cannot match; token-only and scope restrictions win; failed DNS
+cannot clear a prior snapshot; partial failure cannot silently drop IPv6; config restart cannot undo revocation;
+old requests and approvals survive migration; audit update/delete triggers still reject mutation; stale approval
+buttons cannot create another entry; unauthorized commands and API writes cannot change allowlist state.

@@ -1,6 +1,6 @@
 # key-master
 
-A self-hosted resource gateway with machine/device tokens, temporary Telegram approvals, and an append-only SQLite audit trail. No telemetry or paid services.
+A self-hosted resource gateway with machine/device tokens, temporary Telegram approvals, persistent network allowlists, and an append-only SQLite audit trail. No telemetry or paid services.
 
 ## Architecture
 
@@ -21,7 +21,7 @@ Caller -> optional nginx -> Hono gateway -> file / inline / upstream
 - `apps/admin`: bilingual Vite/React console with seven pages, secure Telegram login, live approvals, and light/dark/system themes.
 - `tasks.json`: implementation checklist and verification evidence.
 
-The decision order is missing/disabled → public → valid token → internal CIDR → token-only denial → active grant → active block → pending approval. HEAD, Range, and conditional GET pass through the same gate. Denials use 403 (404 for absent/disabled resources), never subscription configuration bodies.
+The decision order is missing/disabled → public → valid token → internal CIDR → token-only denial → active allowlist → active grant → active block → pending approval. HEAD, Range, and conditional GET pass through the same gate. Denials use 403 (404 for absent/disabled resources), never subscription configuration bodies.
 
 ## Quick start
 
@@ -49,6 +49,58 @@ Replace the session-secret placeholder in `.env` with a random secret before dep
 
 Resources declared in YAML are upserted on boot; changed fields overwrite that resource's DB values. Removing an entry does not delete it: set `enabled: false` to disable it explicitly. Restart after configuration changes. Paths are relative to the configuration file, selected with `KM_CONFIG` (default `config.yaml`). Durations are seconds, timestamps in the database are Unix milliseconds, and scopes are JSON arrays including `"*"` for all resources.
 
+## Long-term allowlist
+
+For networks you trust, add an IP, narrow CIDR, or DDNS hostname in Grants → Allowlist, with `/allow`, or
+with **Always allow this IP** in Telegram, the request drawer or Overview. Entries do not expire; remove
+one from the admin list, its Telegram Remove button, or `/unallow <id>`. All commands remain owner-only.
+The quick action grants all resources, preserves explicit token-only rules, clears that subject's pending/block,
+and saves IPv6 as /64. An explicitly entered IPv6 address matches exactly.
+
+```yaml
+allowlist:
+  - id: example-home
+    label: Example home broadband
+    value: home.example.com
+    # scope defaults to ["*"]
+  - id: example-network
+    label: Example fixed network
+    value: 203.0.113.0/24
+    scope: [/private]
+```
+
+To set the refresh interval, use the object form instead of the array:
+
+```yaml
+allowlist:
+  resolve_interval_s: 300 # 60–86400 seconds
+  entries:
+    - id: example-home
+      label: Example home broadband
+      value: home.example.com
+    - id: example-ipv6
+      label: Example IPv6 network
+      value: "2001:db8:1::/48"
+```
+
+Startup imports by stable id and resolves hosts immediately. Each background tick resolves A + AAAA, with
+IPv4 exact matches and IPv6 /64 matches. Failed or empty lookups retain the last good snapshot and write a
+`bot_events` event; initial failures have no addresses to authorize. A partial family failure also retains the
+whole snapshot. ENODATA in one family is accepted if the other has addresses. New hosts added while running
+resolve on the next tick. Every tick is bounded to 1,000 hosts / 2,000 DNS calls, without overlapping ticks.
+
+CIDRs may be IPv4 /24–/32 or IPv6 /48–/128; broader ranges are rejected by configuration, commands and API.
+Hostnames must have valid ASCII DNS labels (punycode accepted), at least two labels, no wildcard, scheme,
+port or path. Scope is a comma-separated list in the UI and a JSON array in the API/config; `*` means all.
+A match is audited as `allow_allowlist`, links `allowlist_id`, leaves `grant_id` empty and updates the entry's
+last match. The request drawer retains the link after revocation. Observe mode follows its existing rules.
+
+Config changes overwrite label/value/kind/scope/source, while creation, revocation and last-match timestamps
+survive. Removing a config entry does not delete it; revocation is preserved on restart. Unchanged hostname
+values retain their DNS cache; changing a value clears the old cache. IDs must be unique and contain 1–50
+letters, digits, underscores or hyphens. At most 1,000 entries can be declared in config; the admin active list
+shows up to 1,000 and the Telegram command shows the latest 50.
+
 ## Docker
 
 ```sh
@@ -68,13 +120,16 @@ Compose mounts `config.example.yaml` for a reproducible demo. For deployment, co
 
 Set `KM_TELEGRAM_TOKEN` in `.env` and quoted numeric `telegram.owner_chat_ids` in YAML, then restart. Only configured chats can act; other chats are ignored and recorded in `bot_events`. Use `bot.lang: en` or `zh`. No live bot credentials are included in this repository.
 
-Pending messages contain the resource, IP, client family, trimmed UA, UTC timestamp, request ID and four buttons: allow 10 minutes, allow 1 hour, issue a device token, deny 1 hour. The first two durations and block duration are configurable. Approval updates the original message. Device issuance replies with a URL for each requested resource, using `?k=`; the database stores only the hash. Keep those links private.
+Pending messages contain the resource, IP, client family, trimmed UA, UTC timestamp, request ID and five buttons: allow 10 minutes, allow 1 hour, issue a device token, deny 1 hour, and always allow this IP. The last action grants all-resource access until revoked, saving IPv6 as a /64 network. The first two durations and block duration are configurable. Approval updates the original message. Device issuance replies with a URL for each requested resource, using `?k=`; the database stores only the hash. Keep those links private.
 
 | Command | Behavior |
 | --- | --- |
 | `/status` | Active grants, blocks and recent pending subjects |
 | `/grant <ip> [minutes]` | Grant that IP access to all resource slugs |
 | `/revoke <ip\|token id>` | Revoke matching grants or a token |
+| `/allow <ip\|cidr\|host> [label]` | Add a long-term network; default label is the value, scope is all resources |
+| `/allowlist` | Latest 50 active entries with resolved addresses, last match and per-entry Remove buttons |
+| `/unallow <id>` | Soft-revoke a long-term entry |
 | `/tokens` | Latest 20 tokens, without secrets |
 | `/audit [n]` | Latest requests, bounded to 50 |
 | `/login` | Issue a hashed 6-digit, 5-minute code; supersede the previous code |
@@ -94,9 +149,10 @@ Optional webhook mode is implemented: set `telegram.mode: webhook`, a random `te
 | `/api/admin/session` | GET; session status |
 | `/api/admin/overview?range=24h` | GET; 24-hour totals, active grants, pending, time buckets, top clients/IPs; also `range=7d` |
 | `/api/admin/requests` | GET; `page`, `pageSize` (1–100), `from`, `to` (Unix milliseconds), `decision`, `client`, `resource`, `q` (IP/request ID substring) |
-| `/api/admin/requests/:id` | GET; full audit record, safe header subset, matched grant/token IDs |
+| `/api/admin/requests/:id` | GET; full audit record, safe header subset, matched grant/token/allowlist IDs and allowlist entry |
 | `/api/admin/approvals` | GET; pending and recent decisions |
-| `/api/admin/approvals/:id` | POST `{action, duration?}`; `allow`, `deny`, `device_token`; same transaction as Telegram buttons |
+| `/api/admin/approvals/:id` | POST `{action, duration?}`; `allow`, `deny`, `device_token`, `always`; same transaction as Telegram buttons |
+| `/api/admin/allowlist`, `/api/admin/allowlist/:id` | GET active collection, POST `{value,label,scope?}` or `{requestId}`; DELETE soft-revokes the item |
 | `/api/admin/grants`, `/api/admin/grants/:id` | GET/POST collection, PATCH/DELETE item; DELETE revokes, preserving history |
 | `/api/admin/tokens`, `/api/admin/tokens/:id` | GET/POST collection, DELETE item; list includes seven-day usage, never secrets or hashes |
 | `/api/admin/resources`, `/api/admin/resources/:id` | GET/POST collection, PUT/DELETE item; PUT includes the `enabled` flag |
@@ -134,6 +190,16 @@ Forwarded IP headers are ignored unless the socket peer belongs to `trusted_prox
 Every application response, including health/admin/error responses, has a ULID request ID and an audit row. Paths omit query strings to avoid persisting `?k=`. The nginx tailer imports only `km_source: direct` records; app-proxied requests are already audited. It persists inode/offset cursors, waits for complete lines, handles rotation/truncation, and processes at most 1 MiB/2,000 lines per tick. Invalid records are skipped. SQLite triggers reject updates and deletes of `requests`.
 
 ## Design notes
+
+- YAML cannot make `allowlist` both a sequence and a mapping. The array form is shorthand for
+  `{entries: [...], resolve_interval_s: 300}`; use the mapping form for a custom interval. DDNS failures keep
+  old permissions until a successful refresh or explicit revocation. A /64 match changes the host portion
+  only, not a changing ISP prefix: the next successful DDNS refresh picks up a new prefix.
+- Migration `0003_allowlist.sql` extends SQLite CHECK constraints by rebuilding requests/approvals in the
+  migration transaction, preserving history, foreign keys, indexes and append-only triggers. Prior migration
+  files are unchanged. Allowlist labels from quick actions use UTC dates. `/allow` entries use source `command`;
+  Telegram approval buttons use `telegram`. Explicitly overlapping entries are allowed and are revoked by id.
+- Allowlist UI evidence, baseline comparison and behavior assertions: [allowlist acceptance](docs/ALLOWLIST-ACCEPTANCE.md).
 
 - Config `tokens[]` imports existing machine tokens by stable `id` at startup. Only `secret_sha256` is accepted; hash UTF-8 `KM_TOKEN_PEPPER + token` when pepper is configured. Configured label/hash/scope/kind/expiry overwrite those DB fields; created/last-used/revoked timestamps survive upserts. Omitted expiry means no expiry; an expiry may be a zoned ISO string or Unix milliseconds. Removing an entry does not delete/revoke it. nginx remains an independent authorization plane; its fixed `km_token_id` log label links audit rows to imported tokens without logging plaintext. See [nginx import example](docs/nginx.md).
 
