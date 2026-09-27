@@ -24,7 +24,8 @@
     "id": "admin",
     "task": "React 19 + Tailwind 4 placeholder served at /admin",
     "verification": "Vite build, server static test, desktop/mobile/dark screenshots",
-    "passes": false
+    "passes": true,
+    "evidence": "Admin TypeScript/Vite build exit 0; curl /admin 200; docs/ui-acceptance.md and six screenshots"
   },
   {
     "id": "delivery",
