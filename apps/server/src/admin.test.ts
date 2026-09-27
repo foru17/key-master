@@ -424,3 +424,41 @@ it("lists imported tokens and correlates nginx audit without exposing hashes", a
   const details = await req(`admin/requests/${audit?.id}`);
   expect(await details.json()).toMatchObject({ tokenId: "example-nginx-token", source: "nginx" });
 });
+it("describes sources and clients, and reports per-resource activity", async () => {
+  const hit = (ua: string) =>
+    app.request("https://example.com/private", { headers: { "user-agent": ua } }, peer);
+  await hit("Shadowrocket/3378 CFNetwork/3886.100.1 Darwin/27.0.0 iPhone18,3");
+  await hit("curl/8.7.1");
+  const list = (await (await req("admin/requests")).json()) as {
+    items: {
+      id: string;
+      ipInfo: { scope: string } | null;
+      client: { kind: string; name: string };
+    }[];
+  };
+  const described = list.items.filter((i) => i.client);
+  expect(described.map((i) => i.client.name)).toEqual(
+    expect.arrayContaining(["Shadowrocket", "curl"]),
+  );
+  expect(described[0]?.ipInfo).toMatchObject({ scope: "reserved" });
+  const detail = (await (await req(`admin/requests/${described[0]?.id}`)).json()) as {
+    client: { kind: string };
+    ipInfo: { source: string };
+  };
+  expect(detail.client.kind).toBeDefined();
+  expect(detail.ipInfo.source).toBe("none");
+  const resources = (await (await req("admin/resources")).json()) as {
+    slug: string;
+    requests24h: number;
+    denied24h: number;
+    lastRequestAt: number | null;
+  }[];
+  const row = resources.find((r) => r.slug === "/private");
+  expect(row?.requests24h).toBeGreaterThanOrEqual(2);
+  expect(row?.denied24h).toBeGreaterThanOrEqual(0);
+  expect(row?.lastRequestAt).not.toBeNull();
+  const approvals = (await (await req("admin/approvals")).json()) as {
+    pending: { ipInfo: unknown; client: { name: string } | null }[];
+  };
+  for (const p of approvals.pending) expect(p).toHaveProperty("ipInfo");
+});

@@ -118,6 +118,9 @@ for (const width of [1440, 390])
       await expect(page.locator(".stat").first()).toBeVisible();
       await expect(page.locator(".chart-labels time:visible")).toHaveCount(width === 390 ? 3 : 6);
       await shot("overview");
+      await page.goto("/admin/requests");
+      await expect(page.locator(".skeleton")).toHaveCount(0);
+      await shot("requests");
       await page.goto("/admin/requests?q=EXAMPLE_PENDING_REQUEST");
       const row =
         width === 1440 ? page.locator(".audit-row").first() : page.locator(".audit-card").first();
@@ -209,12 +212,13 @@ test("real admin workflows, rollback, bilingual themes and keyboard", async ({ p
   await resource.getByRole("button", { name: "Edit", exact: true }).click();
   await page.getByLabel("Source / content", { exact: true }).fill("Edited example content");
   await page.locator("dialog").getByRole("button", { name: "Save changes" }).click();
-  await resource.getByRole("button", { name: "Disable", exact: true }).click();
+  await resource.getByRole("switch", { name: "Disable", exact: true }).click();
   await page.locator(":popover-open").getByRole("button", { name: "Confirm", exact: true }).click();
   await expect(resource.getByText("Disabled", { exact: true })).toBeVisible();
-  await resource.getByRole("button", { name: "Enable", exact: true }).click();
+  await resource.getByRole("switch", { name: "Enable", exact: true }).click();
   await expect(resource.getByText("Enabled", { exact: true })).toBeVisible();
-  await resource.getByRole("button", { name: "Delete", exact: true }).click();
+  await resource.getByRole("button", { name: "More actions", exact: true }).click();
+  await page.locator(":popover-open").getByRole("button", { name: "Delete", exact: true }).click();
   await page.locator(":popover-open").getByRole("button", { name: "Confirm", exact: true }).click();
   await expect(resource).toHaveCount(0);
   await page.goto("/admin/settings");
@@ -304,7 +308,8 @@ for (const theme of ["light", "dark"] as const)
       );
       if (end) expect(await page.evaluate(() => scrollY)).toBeGreaterThan(0);
       const box = await sidebar.boundingBox();
-      expect(box?.y).toBe(0);
+      // Sub-pixel layout heights can leave the sticky sidebar a fraction of a pixel off after scrolling.
+      expect(Math.abs(box?.y ?? Number.POSITIVE_INFINITY)).toBeLessThan(1);
       expect(box?.height).toBe(600);
       await expect(page.locator(".sidebar-footer")).toBeInViewport();
     }

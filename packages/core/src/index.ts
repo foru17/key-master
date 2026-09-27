@@ -3,6 +3,7 @@ import ipaddr from "ipaddr.js";
 import { themeCss } from "./theme.js";
 import { formatTimestamp } from "./time.js";
 
+export * from "./client.js";
 export { validTimeZone } from "./time.js";
 
 export const clientFamilies = [

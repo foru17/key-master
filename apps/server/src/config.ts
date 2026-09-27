@@ -126,12 +126,35 @@ export const configSchema = z
     resources: z.array(resourceSchema).max(10000).default([]),
     ingest: z.object({ nginx_log: z.string().optional() }).default({}),
     admin: z.object({ allowed_cidrs: cidrs.default([]) }).default({ allowed_cidrs: [] }),
+    geo: z
+      .object({
+        // off: no lookups. online: GET online_url (JSON: country, country_name, city, asn, as_name,
+        // as_domain, continent). mmdb: local GeoLite2-City + GeoLite2-ASN files in mmdb_dir.
+        provider: z.enum(["off", "online", "mmdb"]).default("off"),
+        online_url: z.union([httpUrl, z.literal("")]).default(""),
+        mmdb_dir: z.string().default(""),
+        cache_days: z.number().int().min(1).max(365).default(7),
+        timeout_ms: z.number().int().min(100).max(10000).default(2500),
+      })
+      .default({ provider: "off", online_url: "", mmdb_dir: "", cache_days: 7, timeout_ms: 2500 }),
   })
   .superRefine((config, ctx) => {
     if (new Set(config.tokens.map((t) => t.id)).size !== config.tokens.length)
       ctx.addIssue({ code: "custom", path: ["tokens"], message: "Duplicate token id" });
     if (new Set(config.resources.map((r) => r.slug)).size !== config.resources.length)
       ctx.addIssue({ code: "custom", path: ["resources"], message: "Duplicate resource slug" });
+    if (config.geo.provider === "online" && !config.geo.online_url)
+      ctx.addIssue({
+        code: "custom",
+        path: ["geo", "online_url"],
+        message: "online provider needs online_url",
+      });
+    if (config.geo.provider === "mmdb" && !config.geo.mmdb_dir)
+      ctx.addIssue({
+        code: "custom",
+        path: ["geo", "mmdb_dir"],
+        message: "mmdb provider needs mmdb_dir",
+      });
     if (
       config.telegram.mode === "webhook" &&
       (!config.telegram.webhook_path || config.telegram.webhook_secret.length < 24)
@@ -154,6 +177,7 @@ export function loadConfig(
   config.db_path = config.db_path === ":memory:" ? config.db_path : resolve(root, config.db_path);
   config.file_root = resolve(root, config.file_root);
   if (config.ingest.nginx_log) config.ingest.nginx_log = resolve(root, config.ingest.nginx_log);
+  if (config.geo.mmdb_dir) config.geo.mmdb_dir = resolve(root, config.geo.mmdb_dir);
   const secrets = {
     telegramToken: env.KM_TELEGRAM_TOKEN ?? "",
     sessionSecret: env.KM_SESSION_SECRET ?? "",

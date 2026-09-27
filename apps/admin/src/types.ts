@@ -1,9 +1,49 @@
+export type IpScope =
+  | "public"
+  | "private"
+  | "loopback"
+  | "cgnat"
+  | "link_local"
+  | "reserved"
+  | "invalid";
+export type IpInfo = {
+  ip: string;
+  scope: IpScope;
+  country: string | null;
+  countryName: string | null;
+  city: string | null;
+  continent: string | null;
+  asn: string | null;
+  asName: string | null;
+  asDomain: string | null;
+  source: "online" | "mmdb" | "none";
+};
+export type ClientKind =
+  | "proxy"
+  | "browser"
+  | "system"
+  | "tool"
+  | "preview"
+  | "crawler"
+  | "scanner"
+  | "unknown";
+export type ClientInfo = {
+  kind: ClientKind;
+  name: string;
+  version: string | null;
+  os: string | null;
+  osVersion: string | null;
+  device: string | null;
+  label: string;
+};
 export type Pending = {
   id: string;
   subject: string;
   requestId: string;
   slugs: string[];
   expiresAt: number;
+  ipInfo?: IpInfo | null;
+  client?: ClientInfo | null;
 };
 export type Audit = {
   id: string;
@@ -22,6 +62,8 @@ export type Audit = {
   bytes: number;
   latencyMs: number;
   source: string;
+  ipInfo?: IpInfo | null;
+  client?: ClientInfo;
 };
 export type Grant = {
   id: string;
@@ -32,6 +74,7 @@ export type Grant = {
   expiresAt: number;
   revokedAt: number | null;
   createdAt: number;
+  ipInfo?: IpInfo | null;
 };
 export type Token = {
   id: string;
@@ -53,6 +96,9 @@ export type Resource = {
   enabled: boolean;
   size: number;
   hash: string;
+  requests24h?: number;
+  denied24h?: number;
+  lastRequestAt?: number | null;
 };
 export type Settings = {
   observe_mode: boolean;
@@ -73,5 +119,5 @@ export type Overview = {
   series: { ts: number; allowed: number; denied: number }[];
   pending: Pending[];
   clients: { label: string; count: number }[];
-  ips: { label: string; count: number }[];
+  ips: { label: string; count: number; ipInfo?: IpInfo | null }[];
 };

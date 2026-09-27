@@ -8,6 +8,7 @@ import { createAdmin } from "./admin.js";
 import { recordPending } from "./approval.js";
 import type { Config, Secrets } from "./config.js";
 import type { Store } from "./db.js";
+import { GeoService } from "./geo.js";
 import { clientIp } from "./ip.js";
 import { containedFile, type Fetcher, serveResource } from "./resource.js";
 import * as schema from "./schema.js";
@@ -32,9 +33,11 @@ export function createApp(options: {
   fetcher?: Fetcher;
   now?: () => number;
   adminRoot?: string;
+  geo?: GeoService;
 }) {
   const { store, config, secrets } = options;
   const clock = options.now ?? Date.now;
+  const geo = options.geo ?? new GeoService(store, config);
   const adminRoot =
     options.adminRoot ?? fileURLToPath(new URL("../../admin/dist", import.meta.url));
   const app = new Hono<{
@@ -147,6 +150,7 @@ export function createApp(options: {
       config,
       secrets,
       clock,
+      geo,
       ...(options.bot?.sendLoginCode
         ? { sendCode: options.bot.sendLoginCode.bind(options.bot) }
         : {}),

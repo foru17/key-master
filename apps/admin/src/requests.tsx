@@ -1,5 +1,5 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ArrowUpRight, Monitor, Search } from "lucide-react";
+import { ArrowUpRight, Search } from "lucide-react";
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
@@ -16,6 +16,16 @@ import {
   Timestamp,
   useToast,
 } from "./components";
+import {
+  ClientBadge,
+  ClientDetails,
+  flag,
+  IpBadge,
+  IpDetails,
+  networkLabel,
+  ScopeChip,
+  useLocation,
+} from "./identity";
 import { GrantForm } from "./manage";
 import type { Audit, Resource } from "./types";
 
@@ -49,6 +59,23 @@ const families = [
   "browser",
   "unknown",
 ];
+function DrawerOrigin({ row }: { row: Audit }) {
+  const place = useLocation(row.ipInfo);
+  const network = networkLabel(row.ipInfo);
+  if (!row.ipInfo || (row.ipInfo.scope === "public" && !row.ipInfo.country)) return null;
+  return (
+    <p className="drawer-origin">
+      {row.ipInfo.scope === "public" ? (
+        <>
+          {flag(row.ipInfo.country)} {place}
+          {network && <span className="muted"> · {network}</span>}
+        </>
+      ) : (
+        <ScopeChip info={row.ipInfo} />
+      )}
+    </p>
+  );
+}
 export function RequestDrawer({ id, onClose }: { id: string; onClose: () => void }) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -64,6 +91,7 @@ export function RequestDrawer({ id, onClose }: { id: string; onClose: () => void
           <div className="drawer-summary">
             <Pill value={row.decision} />
             <h2 className="mono">{row.ip}</h2>
+            <DrawerOrigin row={row} />
             <code>{row.path}</code>
           </div>
           <dl className="detail-list">
@@ -75,7 +103,6 @@ export function RequestDrawer({ id, onClose }: { id: string; onClose: () => void
             </div>
             {[
               [t("requestId"), row.id],
-              [t("client"), row.clientFamily],
               [t("status"), `${row.method} · ${row.status}`],
               [t("latency"), `${row.latencyMs} ms · ${row.bytes} B`],
               [t("source"), row.source],
@@ -88,8 +115,10 @@ export function RequestDrawer({ id, onClose }: { id: string; onClose: () => void
               </div>
             ))}
           </dl>
-          <h3>{t("userAgent")}</h3>
-          <pre>{row.ua || "—"}</pre>
+          <h3>{t("ipOrigin")}</h3>
+          <IpDetails ip={row.ip} info={row.ipInfo} />
+          <h3>{t("clientSection")}</h3>
+          <ClientDetails client={row.client} ua={row.ua} />
           <h3>{t("headers")}</h3>
           <pre>{JSON.stringify(row.headers, null, 2)}</pre>
           <div className="actions">
@@ -230,11 +259,8 @@ export function Requests() {
                     <Timestamp value={row.ts} />
                     <Pill value={row.decision} />
                     <code>{row.resourceSlug ?? row.path}</code>
-                    <code>{row.ip}</code>
-                    <span className="client-cell">
-                      <Monitor size={13} />
-                      {row.clientFamily}
-                    </span>
+                    <IpBadge ip={row.ip} info={row.ipInfo} />
+                    <ClientBadge client={row.client} fallback={row.clientFamily} />
                     <span className="mono">{row.status}</span>
                     <span className="mono muted">{row.latencyMs} ms</span>
                     <span className="muted">{row.source}</span>
@@ -250,10 +276,13 @@ export function Requests() {
                   <Pill value={row.decision} />
                   <Timestamp value={row.ts} />
                 </div>
-                <strong className="mono">{row.ip}</strong>
+                <IpBadge ip={row.ip} info={row.ipInfo} />
                 <code>{row.resourceSlug ?? row.path}</code>
-                <span className="muted">
-                  {row.clientFamily} · {row.status} · {row.latencyMs} ms · {row.source}
+                <span className="audit-card-meta">
+                  <ClientBadge client={row.client} fallback={row.clientFamily} />
+                  <span className="muted">
+                    {row.status} · {row.latencyMs} ms · {row.source}
+                  </span>
                 </span>
               </Button>
             ))}

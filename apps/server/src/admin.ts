@@ -1,4 +1,10 @@
-import { clientFamilies, hashToken, inCidrs, normalizeIp } from "@key-master/core";
+import {
+  clientFamilies,
+  describeUserAgent,
+  hashToken,
+  inCidrs,
+  normalizeIp,
+} from "@key-master/core";
 import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
@@ -14,6 +20,7 @@ import {
   type Secrets,
 } from "./config.js";
 import { getState, issueToken, type Store, setState } from "./db.js";
+import { GeoService } from "./geo.js";
 import * as schema from "./schema.js";
 
 const duration = z.number().int().min(1).max(31536000);
@@ -56,11 +63,14 @@ export function createAdmin(options: {
   secrets: Secrets;
   clock: () => number;
   sendCode?: (code: string) => Promise<void>;
+  geo?: GeoService;
 }) {
   const { store, config, secrets, clock } = options;
+  const geo = options.geo ?? new GeoService(store, config);
+  const subjectIp = (subject: string) => subject.split("|")[0] ?? subject;
   restoreSettings(store, config);
   const api = new Hono<{ Variables: { ip: string } }>();
-  const pending = () =>
+  const pendingRows = () =>
     store.db
       .select()
       .from(schema.pending)
@@ -68,6 +78,19 @@ export function createAdmin(options: {
       .orderBy(desc(schema.pending.expiresAt))
       .limit(200)
       .all();
+  const pending = () =>
+    pendingRows().map((p) => {
+      const request = store.db
+        .select({ ua: schema.requests.ua })
+        .from(schema.requests)
+        .where(eq(schema.requests.id, p.requestId))
+        .get();
+      return {
+        ...p,
+        ipInfo: geo.cached(subjectIp(p.subject)),
+        client: request ? describeUserAgent(request.ua) : null,
+      };
+    });
   const fail = (message: string) => ({ error: message });
   api.use("*", async (c, next) => {
     c.header("Cache-Control", "no-store");
@@ -197,11 +220,13 @@ export function createAdmin(options: {
           "SELECT client_family label, count(*) count FROM requests WHERE resource_slug IS NOT NULL AND ts >= ? GROUP BY client_family ORDER BY count DESC LIMIT 5",
         )
         .all(since),
-      ips: store.sqlite
-        .prepare(
-          "SELECT ip label, count(*) count FROM requests WHERE resource_slug IS NOT NULL AND ts >= ? GROUP BY ip ORDER BY count DESC LIMIT 5",
-        )
-        .all(since),
+      ips: (
+        store.sqlite
+          .prepare(
+            "SELECT ip label, count(*) count FROM requests WHERE resource_slug IS NOT NULL AND ts >= ? GROUP BY ip ORDER BY count DESC LIMIT 5",
+          )
+          .all(since) as { label: string; count: number }[]
+      ).map((row) => ({ ...row, ipInfo: geo.cached(row.label) })),
     });
   });
   api.get("/admin/requests", (c) => {
@@ -245,21 +270,24 @@ export function createAdmin(options: {
       .prepare(`SELECT id FROM requests WHERE ${where} ORDER BY ts DESC, id DESC LIMIT ? OFFSET ?`)
       .all(...values, query.pageSize, (query.page - 1) * query.pageSize) as { id: string }[];
     return c.json({
-      items: ids.map(({ id }) =>
-        store.db.select().from(schema.requests).where(eq(schema.requests.id, id)).get(),
-      ),
+      items: ids.map(({ id }) => {
+        const row = store.db.select().from(schema.requests).where(eq(schema.requests.id, id)).get();
+        return row && { ...row, ipInfo: geo.cached(row.ip), client: describeUserAgent(row.ua) };
+      }),
       total,
       page: query.page,
       pageSize: query.pageSize,
     });
   });
-  api.get("/admin/requests/:id", (c) => {
+  api.get("/admin/requests/:id", async (c) => {
     const row = store.db
       .select()
       .from(schema.requests)
       .where(eq(schema.requests.id, c.req.param("id")))
       .get();
-    return row ? c.json(row) : c.json(fail("Not found / 未找到"), 404);
+    return row
+      ? c.json({ ...row, ipInfo: await geo.lookup(row.ip), client: describeUserAgent(row.ua) })
+      : c.json(fail("Not found / 未找到"), 404);
   });
   api.get("/admin/approvals", (c) =>
     c.json({
@@ -269,7 +297,8 @@ export function createAdmin(options: {
         .from(schema.approvals)
         .orderBy(desc(schema.approvals.ts))
         .limit(100)
-        .all(),
+        .all()
+        .map((a) => ({ ...a, ipInfo: geo.cached(subjectIp(a.subject)) })),
     }),
   );
   api.post("/admin/approvals/:id", async (c) => {
@@ -308,7 +337,8 @@ export function createAdmin(options: {
         .from(schema.grants)
         .orderBy(desc(schema.grants.createdAt))
         .limit(1000)
-        .all(),
+        .all()
+        .map((g) => ({ ...g, ipInfo: geo.cached(subjectIp(g.subject)) })),
     ),
   );
   api.post("/admin/grants", async (c) => {
@@ -453,17 +483,42 @@ export function createAdmin(options: {
       .run();
     return r.changes ? c.json({ ok: true }) : c.json(fail("Not found / 未找到"), 404);
   });
-  api.get("/admin/resources", (c) =>
-    c.json(
+  api.get("/admin/resources", (c) => {
+    const recent = new Map(
+      (
+        store.sqlite
+          .prepare(
+            "SELECT resource_slug slug, count(*) n, sum(decision LIKE 'deny_%') denied FROM requests WHERE resource_slug IS NOT NULL AND ts >= ? GROUP BY resource_slug",
+          )
+          .all(clock() - 86400000) as { slug: string; n: number; denied: number }[]
+      ).map((row) => [row.slug, row]),
+    );
+    const last = new Map(
+      (
+        store.sqlite
+          .prepare(
+            "SELECT resource_slug slug, max(ts) ts FROM requests WHERE resource_slug IS NOT NULL GROUP BY resource_slug",
+          )
+          .all() as { slug: string; ts: number }[]
+      ).map((row) => [row.slug, row.ts]),
+    );
+    return c.json(
       store.db
         .select()
         .from(schema.resources)
         .orderBy(desc(schema.resources.createdAt))
         .limit(1000)
         .all()
-        .map((r) => ({ ...r, size: Buffer.byteLength(r.source), hash: hashToken(r.source) })),
-    ),
-  );
+        .map((r) => ({
+          ...r,
+          size: Buffer.byteLength(r.source),
+          hash: hashToken(r.source),
+          requests24h: recent.get(r.slug)?.n ?? 0,
+          denied24h: recent.get(r.slug)?.denied ?? 0,
+          lastRequestAt: last.get(r.slug) ?? null,
+        })),
+    );
+  });
   for (const method of ["post", "put"] as const)
     api[method](method === "post" ? "/admin/resources" : "/admin/resources/:id", async (c) => {
       const input = resourceSchema.parse(await c.req.json());

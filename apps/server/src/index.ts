@@ -4,6 +4,7 @@ import { createApp } from "./app.js";
 import { HttpTelegramApi, TelegramBot } from "./bot/telegram.js";
 import { loadConfig } from "./config.js";
 import { openStore, syncResources, syncTokens } from "./db.js";
+import { GeoService } from "./geo.js";
 import { tailNginx } from "./ingest.js";
 
 const { config, secrets } = loadConfig(process.env.KM_CONFIG ?? "config.yaml");
@@ -11,15 +12,23 @@ mkdirSync(config.file_root, { recursive: true });
 const store = openStore(config.db_path);
 syncResources(store, config);
 syncTokens(store, config);
+const geo = new GeoService(store, config);
 const enabled =
   secrets.telegramToken !== "" &&
   secrets.telegramToken !== "YOUR_BOT_TOKEN" &&
   config.telegram.owner_chat_ids.length > 0;
 const bot = enabled
-  ? new TelegramBot(store, config, secrets, new HttpTelegramApi(secrets.telegramToken))
+  ? new TelegramBot(
+      store,
+      config,
+      secrets,
+      new HttpTelegramApi(secrets.telegramToken),
+      Date.now,
+      geo,
+    )
   : undefined;
 if (bot) void bot.refreshIdentity();
-const app = createApp({ store, config, secrets, ...(bot ? { bot } : {}) });
+const app = createApp({ store, config, secrets, geo, ...(bot ? { bot } : {}) });
 const server = serve({ fetch: app.fetch, hostname: config.listen.host, port: config.listen.port });
 const polling = bot && config.telegram.mode === "polling" ? bot.startPolling() : undefined;
 const logPath = config.ingest.nginx_log;

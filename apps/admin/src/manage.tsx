@@ -1,11 +1,25 @@
-import { ArrowUpRight, FileBox, KeyRound, Plus, ShieldCheck } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import {
+  ArrowUpRight,
+  Braces,
+  CloudDownload,
+  Copy,
+  Ellipsis,
+  FileText,
+  Fingerprint,
+  KeyRound,
+  ListFilter,
+  Pencil,
+  Plus,
+  Search,
+  ShieldCheck,
+} from "lucide-react";
+import { type CSSProperties, type FormEvent, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import { useAction, useData } from "./api";
 import {
   Button,
   Confirm,
-  CopyButton,
   Empty,
   ErrorBox,
   Field,
@@ -17,6 +31,7 @@ import {
   Timestamp,
   useToast,
 } from "./components";
+import { formatBytes, IpBadge, RelativeTime } from "./identity";
 import type { Grant, Issued, Resource, Token } from "./types";
 
 const fields = (event: FormEvent<HTMLFormElement>) => {
@@ -103,7 +118,12 @@ function GrantRow({ item, onEdit }: { item: Grant; onEdit: () => void }) {
         <ShieldCheck size={18} />
       </span>
       <div className="identity">
-        <strong className="mono">{item.subject}</strong>
+        <div className="grant-subject">
+          <IpBadge ip={item.subject.split("|")[0] ?? item.subject} info={item.ipInfo} />
+          {item.subject.includes("|") && (
+            <span className="family-chip">{item.subject.split("|")[1]}</span>
+          )}
+        </div>
         <p>
           <code>{item.scope.join(", ")}</code> · {item.grantedBy}
         </p>
@@ -400,6 +420,17 @@ export function ResourceForm({ resource, onClose }: { resource?: Resource; onClo
           <span>{t("enabled")}</span>
           <input type="checkbox" name="enabled" defaultChecked={resource?.enabled ?? true} />
         </label>
+        {resource && (
+          <div className="fingerprint-box">
+            <div className="fingerprint-head">
+              <Fingerprint size={15} />
+              <strong className="fingerprint-title">{t("fingerprintLabel")}</strong>
+              <span className="muted">· {formatBytes(resource.size)}</span>
+            </div>
+            <code>SHA-256 {resource.hash}</code>
+            <p className="muted">{t("contentSafety")}</p>
+          </div>
+        )}
         <ErrorBox error={action.error} />
         <div className="form-footer">
           <Button onClick={onClose}>{t("cancel")}</Button>
@@ -411,54 +442,178 @@ export function ResourceForm({ resource, onClose }: { resource?: Resource; onClo
     </Modal>
   );
 }
-function ResourceRow({ item, onEdit }: { item: Resource; onEdit: () => void }) {
+const kindIcons = { file: FileText, inline: Braces, upstream: CloudDownload } as const;
+const policies = ["approval", "token_only", "public"] as const;
+function PolicyPill({ policy }: { policy: Resource["policy"] }) {
+  const { t } = useTranslation();
+  return (
+    <span className={`policy-pill policy-${policy}`}>
+      <i />
+      {t(policy)}
+    </span>
+  );
+}
+function ResourceSwitch({ item }: { item: Resource }) {
   const { t } = useTranslation();
   const toast = useToast();
+  const id = useId();
   const action = useAction(`resources/${item.id}`, "PUT", () => toast(t("saved")));
-  const remove = useAction(`resources/${item.id}`, "DELETE", () => toast(t("saved")));
+  const set = (enabled: boolean) =>
+    action.mutate({ ...item, content_type: item.contentType, enabled });
   return (
-    <div className="resource-row">
-      <div className="management-row">
-        <span className="resource-icon">
-          <FileBox size={19} />
+    <div className="resource-state">
+      {item.enabled ? (
+        <>
+          <button
+            type="button"
+            role="switch"
+            aria-checked="true"
+            aria-label={t("disable")}
+            className="switch on"
+            popoverTarget={id}
+            disabled={action.isPending}
+          >
+            <i />
+          </button>
+          <div id={id} popover="auto" className="confirm-popover">
+            <h3>{t("confirmTitle")}</h3>
+            <p>{t("disableHelp")}</p>
+            <div className="actions">
+              <Button popoverTarget={id} popoverTargetAction="hide">
+                {t("cancel")}
+              </Button>
+              <Button
+                className="danger"
+                popoverTarget={id}
+                popoverTargetAction="hide"
+                onClick={() => set(false)}
+              >
+                {t("confirm")}
+              </Button>
+            </div>
+          </div>
+        </>
+      ) : (
+        <button
+          type="button"
+          role="switch"
+          aria-checked="false"
+          aria-label={t("enable")}
+          className="switch"
+          disabled={action.isPending}
+          onClick={() => set(true)}
+        >
+          <i />
+        </button>
+      )}
+      <span className={item.enabled ? "state-label on" : "state-label"}>
+        {t(item.enabled ? "enabled" : "disabled")}
+      </span>
+      <ErrorBox error={action.error} />
+    </div>
+  );
+}
+function ResourceMenu({ item }: { item: Resource }) {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const navigate = useNavigate();
+  const id = useId();
+  const anchor = `--menu-${id.replace(/[^A-Za-z0-9]/g, "")}`;
+  const remove = useAction(`resources/${item.id}`, "DELETE", () => toast(t("saved")));
+  const copy = (value: string) =>
+    void navigator.clipboard
+      .writeText(value)
+      .then(() => toast(t("copied")))
+      .catch(() => toast(t("error")));
+  return (
+    <>
+      <Button
+        className="icon-button row-menu-trigger"
+        aria-label={t("moreActions")}
+        popoverTarget={id}
+        style={{ anchorName: anchor } as CSSProperties}
+      >
+        <Ellipsis size={17} />
+      </Button>
+      <div
+        id={id}
+        popover="auto"
+        className="dropdown row-menu"
+        style={{ positionAnchor: anchor } as CSSProperties}
+      >
+        <Button popoverTarget={id} popoverTargetAction="hide" onClick={() => copy(item.slug)}>
+          {t("copyPath")}
+          <Copy size={14} />
+        </Button>
+        <Button
+          popoverTarget={id}
+          popoverTargetAction="hide"
+          onClick={() => navigate(`/requests?resource=${encodeURIComponent(item.slug)}`)}
+        >
+          {t("viewRequests")}
+          <ListFilter size={14} />
+        </Button>
+        <Button popoverTarget={id} popoverTargetAction="hide" onClick={() => copy(item.hash)}>
+          {t("copyFingerprint")}
+          <Fingerprint size={14} />
+        </Button>
+        <hr />
+        <Confirm
+          label={t("remove")}
+          description={t("deleteHelp")}
+          disabled={remove.isPending}
+          onConfirm={() => remove.mutate({})}
+        />
+      </div>
+      <ErrorBox error={remove.error} />
+    </>
+  );
+}
+function ResourceRow({ item, onEdit }: { item: Resource; onEdit: () => void }) {
+  const { t } = useTranslation();
+  const Icon = kindIcons[item.kind];
+  return (
+    <div className={item.enabled ? "resource-row" : "resource-row is-disabled"}>
+      <div className="resource-main">
+        <span className="resource-icon" title={t(item.kind)}>
+          <Icon size={16} />
         </span>
-        <div className="identity">
+        <div className="resource-name">
           <strong className="mono">{item.slug}</strong>
-          <p>
-            {t(item.kind)} · {t(item.policy)}
-          </p>
-        </div>
-        <Pill value={item.enabled ? "enabled" : "disabled"} />
-        <div className="actions">
-          <Button onClick={onEdit}>{t("edit")}</Button>
-          {item.enabled ? (
-            <Confirm
-              label={t("disable")}
-              onConfirm={() =>
-                action.mutate({ ...item, content_type: item.contentType, enabled: false })
-              }
-            />
-          ) : (
-            <Button
-              onClick={() =>
-                action.mutate({ ...item, content_type: item.contentType, enabled: true })
-              }
-            >
-              {t("enable")}
-            </Button>
-          )}
-          <Confirm label={t("remove")} onConfirm={() => remove.mutate({})} />
+          <span>
+            {t(item.kind)} · <code>{item.source}</code>
+          </span>
         </div>
       </div>
-      <details className="fingerprint">
-        <summary>
-          {t("safePreview")} · {item.size} B
-        </summary>
-        <p>{t("contentSafety")}</p>
-        <code>SHA-256 {item.hash}</code>
-        <CopyButton value={item.hash} />
-      </details>
-      <ErrorBox error={action.error ?? remove.error} />
+      <div className="resource-policy">
+        <PolicyPill policy={item.policy} />
+      </div>
+      <div className="resource-stats">
+        <div className="resource-traffic" data-label={t("requests24h")}>
+          <strong className="mono">{item.requests24h ?? "—"}</strong>
+          {item.denied24h ? (
+            <span className="deny-count">{t("deniedCount", { count: item.denied24h })}</span>
+          ) : null}
+        </div>
+        <div className="resource-last" data-label={t("lastRequest")}>
+          {item.lastRequestAt === undefined ? (
+            <span className="faint">—</span>
+          ) : (
+            <RelativeTime value={item.lastRequestAt} />
+          )}
+        </div>
+        <div className="resource-size mono" data-label={t("size")} title={`SHA-256 ${item.hash}`}>
+          {formatBytes(item.size)}
+        </div>
+      </div>
+      <ResourceSwitch item={item} />
+      <div className="resource-actions">
+        <Button className="quiet" onClick={onEdit}>
+          <Pencil size={14} />
+          {t("edit")}
+        </Button>
+        <ResourceMenu item={item} />
+      </div>
     </div>
   );
 }
@@ -466,6 +621,22 @@ export function Resources() {
   const { t } = useTranslation();
   const query = useData<Resource[]>("resources");
   const [form, setForm] = useState<Resource | "new" | null>(null);
+  const [search, setSearch] = useState("");
+  const [policy, setPolicy] = useState<Resource["policy"] | "all">("all");
+  const items = query.data ?? [];
+  const counts = useMemo(() => {
+    const result: Record<string, number> = { all: items.length };
+    for (const p of policies) result[p] = items.filter((item) => item.policy === p).length;
+    return result;
+  }, [items]);
+  const needle = search.trim().toLowerCase();
+  const visible = items.filter(
+    (item) =>
+      (policy === "all" || item.policy === policy) &&
+      (!needle ||
+        item.slug.toLowerCase().includes(needle) ||
+        item.source.toLowerCase().includes(needle)),
+  );
   return (
     <>
       <PageHeading title={t("resources")} description={t("resourcesDesc")}>
@@ -477,17 +648,69 @@ export function Resources() {
       <ErrorBox error={query.error} retry={() => void query.refetch()} />
       {query.isPending ? (
         <Skeleton />
+      ) : items.length ? (
+        <>
+          <div className="resource-toolbar">
+            <div className="search-input">
+              <Search size={16} />
+              <input
+                aria-label={t("resourceSearch")}
+                placeholder={t("resourceSearch")}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <fieldset className="segmented" aria-label={t("policy")}>
+              {(["all", ...policies] as const).map((p) => (
+                <button
+                  type="button"
+                  key={p}
+                  aria-pressed={policy === p}
+                  onClick={() => setPolicy(p)}
+                >
+                  {p === "all" ? t("allPolicies") : t(p)}
+                  <span className="segment-count">{counts[p]}</span>
+                </button>
+              ))}
+            </fieldset>
+            <span className="resource-summary">
+              {t("resourceTotal", { count: items.length })} ·{" "}
+              {t("resourceEnabled", { count: items.filter((item) => item.enabled).length })}
+            </span>
+          </div>
+          <section className="panel resource-panel">
+            <div className="resource-head">
+              <span>{t("resourceColumn")}</span>
+              <span>{t("policy")}</span>
+              <span>{t("requests24h")}</span>
+              <span>{t("lastRequest")}</span>
+              <span>{t("size")}</span>
+              <span>{t("status")}</span>
+              <span className="visually-hidden">{t("moreActions")}</span>
+            </div>
+            {visible.length ? (
+              visible.map((item) => (
+                <ResourceRow key={item.id} item={item} onEdit={() => setForm(item)} />
+              ))
+            ) : (
+              <Empty title={t("resourcesNoMatch")}>
+                <Button
+                  onClick={() => {
+                    setSearch("");
+                    setPolicy("all");
+                  }}
+                >
+                  {t("clearFilters")}
+                </Button>
+              </Empty>
+            )}
+          </section>
+        </>
       ) : (
         <section className="panel">
-          {query.data?.length ? (
-            query.data.map((item) => (
-              <ResourceRow key={item.id} item={item} onEdit={() => setForm(item)} />
-            ))
-          ) : (
-            <Empty>
-              <Button onClick={() => setForm("new")}>{t("newResource")}</Button>
-            </Empty>
-          )}
+          <Empty>
+            <Button onClick={() => setForm("new")}>{t("newResource")}</Button>
+          </Empty>
         </section>
       )}
       {form && (

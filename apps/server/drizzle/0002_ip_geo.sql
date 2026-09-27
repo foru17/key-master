@@ -1,0 +1,6 @@
+CREATE TABLE ip_geo (
+  ip TEXT PRIMARY KEY NOT NULL,
+  data TEXT NOT NULL,
+  source TEXT NOT NULL,
+  fetched_at INTEGER NOT NULL
+);

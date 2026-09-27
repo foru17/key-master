@@ -1,5 +1,5 @@
 import { setTimeout as delay } from "node:timers/promises";
-import { normalizeIp } from "@key-master/core";
+import { describeUserAgent, normalizeIp } from "@key-master/core";
 import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import { ulid } from "ulid";
 import { z } from "zod";
@@ -8,6 +8,7 @@ import { recordPending, resolveApproval } from "../approval.js";
 import { createLoginCode } from "../auth.js";
 import type { Config, Secrets } from "../config.js";
 import { getState, type Store, setState } from "../db.js";
+import { flag, GeoService } from "../geo.js";
 import * as schema from "../schema.js";
 export interface TelegramApi {
   call(method: string, payload: Record<string, unknown>, signal?: AbortSignal): Promise<unknown>;
@@ -63,6 +64,7 @@ export class TelegramBot {
     private secrets: Secrets,
     private api: TelegramApi,
     private clock: () => number = Date.now,
+    private geo: GeoService = new GeoService(store, config),
   ) {}
   private text(en: string, zh: string) {
     return this.config.bot.lang === "zh" ? zh : en;
@@ -103,6 +105,74 @@ export class TelegramBot {
     }
     if (!delivered) throw new Error("Telegram unavailable");
   }
+  private async approvalMessage(request: PendingRequest): Promise<string> {
+    const zh = this.config.bot.lang === "zh";
+    const info = await this.geo.lookup(request.ip);
+    const client = describeUserAgent(request.ua);
+    const kinds: Record<string, [string, string]> = {
+      proxy: ["proxy client", "代理客户端"],
+      browser: ["browser", "浏览器"],
+      system: ["system networking", "系统网络组件"],
+      tool: ["script / CLI", "脚本 / 命令行"],
+      preview: ["link preview bot", "链接预览机器人"],
+      crawler: ["crawler", "爬虫"],
+      scanner: ["scanner", "扫描器"],
+      unknown: ["unknown", "未知"],
+    };
+    const scopes: Record<string, [string, string]> = {
+      private: ["private network", "内网"],
+      loopback: ["this host", "本机"],
+      cgnat: ["Tailscale / CGNAT", "Tailscale / CGNAT"],
+      link_local: ["link-local", "链路本地"],
+      reserved: ["reserved address", "保留地址"],
+      invalid: ["invalid address", "无效地址"],
+    };
+    const pick = (pair: [string, string] | undefined) => (pair ? (zh ? pair[1] : pair[0]) : "");
+    const label = (en: string, cn: string) => (zh ? `${cn}：` : `${en}: `);
+    let country = info.countryName ?? info.country;
+    if (info.country) {
+      try {
+        country =
+          new Intl.DisplayNames([zh ? "zh-CN" : "en"], { type: "region", style: "short" }).of(
+            info.country,
+          ) ?? country;
+      } catch {}
+    }
+    const lines = [`🔐 ${this.text("Approval requested", "待授权请求")}`];
+    lines.push(`${label("Resource", "资源")}${request.slug}`);
+    lines.push(`${label("IP", "IP")}${request.ip}`);
+    if (info.scope !== "public")
+      lines.push(`${label("Location", "位置")}${pick(scopes[info.scope])}`);
+    else if (country || info.city)
+      lines.push(
+        `${label("Location", "位置")}${[flag(info.country), [country, info.city].filter(Boolean).join(" · ")].filter(Boolean).join(" ")}`,
+      );
+    const network = [info.asn, info.asName, info.asDomain].filter(Boolean).join(" · ");
+    if (network) lines.push(`${label("Network", "网络")}${network}`);
+    const kind = pick(kinds[client.kind]);
+    const name = [client.name, client.version].filter(Boolean).join(" ");
+    lines.push(`${label("Client", "客户端")}${zh ? `${name}（${kind}）` : `${name} (${kind})`}`);
+    const platform = [
+      client.os && client.osVersion?.startsWith("Darwin ")
+        ? `${client.os} (${client.osVersion})`
+        : [client.os, client.osVersion].filter(Boolean).join(" "),
+      client.device,
+    ].filter(Boolean);
+    if (platform.length) lines.push(`${label("Platform", "系统 / 设备")}${platform.join(" · ")}`);
+    lines.push(`UA: ${request.ua.slice(0, 300) || "—"}`);
+    let when = new Date(request.now).toISOString();
+    try {
+      when = `${new Intl.DateTimeFormat(zh ? "zh-CN" : "en-GB", {
+        timeZone: this.config.notice.timezone,
+        dateStyle: "short",
+        timeStyle: "medium",
+        hour12: false,
+      }).format(request.now)} (${this.config.notice.timezone})`;
+    } catch {}
+    lines.push(`${label("Time", "时间")}${when}`);
+    lines.push(`ID: ${request.requestId}`);
+    return lines.join("\n");
+  }
   async notify(request: PendingRequest): Promise<void> {
     const pending = recordPending(this.store, this.config, request);
     if (!pending) return;
@@ -133,17 +203,14 @@ export class TelegramBot {
         callback_data: `deny:${pending.id}`,
       },
     ];
+    const message = await this.approvalMessage(request);
     for (const chatId of this.config.telegram.owner_chat_ids.slice(0, 20)) {
       try {
-        const result = z
-          .object({ message_id: z.number() })
-          .parse(
-            await this.send(
-              chatId,
-              `${this.text("Approval requested", "待授权请求")}\n${request.slug}\nIP: ${request.ip}\nClient: ${request.family}\nUA: ${request.ua.slice(0, 300)}\n${new Date(request.now).toISOString()}\nID: ${request.requestId}`,
-              { reply_markup: { inline_keyboard: [buttons.slice(0, 2), buttons.slice(2)] } },
-            ),
-          );
+        const result = z.object({ message_id: z.number() }).parse(
+          await this.send(chatId, message, {
+            reply_markup: { inline_keyboard: [buttons.slice(0, 2), buttons.slice(2)] },
+          }),
+        );
         pending.messages.push({ chatId, messageId: result.message_id });
         this.store.db
           .update(schema.pending)
@@ -285,13 +352,34 @@ export class TelegramBot {
           .from(schema.pending)
           .where(and(gt(schema.pending.expiresAt, now), isNull(schema.pending.resolvedAt)))
           .all();
-        await this.send(
-          chatId,
-          `${this.text("Active grants / blocks / pending", "有效授权 / 封禁 / 待授权")}: ${active.length} / ${blocked.length} / ${pending.length}\n${pending
-            .slice(-10)
-            .map((p) => p.subject)
-            .join("\n")}`,
-        );
+        const zh = this.config.bot.lang === "zh";
+        const where = (subject: string) => {
+          const ip = subject.split("|")[0] ?? subject;
+          const info = this.geo.cached(ip);
+          if (!info) return "";
+          if (info.scope !== "public")
+            return info.scope === "cgnat" ? "Tailscale / CGNAT" : info.scope;
+          let country = info.countryName ?? info.country ?? "";
+          if (info.country)
+            try {
+              country =
+                new Intl.DisplayNames([zh ? "zh-CN" : "en"], { type: "region", style: "short" }).of(
+                  info.country,
+                ) ?? country;
+            } catch {}
+          return [flag(info.country), country, info.asn].filter(Boolean).join(" ");
+        };
+        const until = (ts: number) => `${Math.max(1, Math.round((ts - now) / 60000))} min`;
+        const lines = [
+          `${this.text("Active grants / blocks / pending", "有效授权 / 封禁 / 待授权")}: ${active.length} / ${blocked.length} / ${pending.length}`,
+          ...active
+            .slice(0, 15)
+            .map((g) =>
+              `✅ ${g.subject} ${where(g.subject)} · ${until(g.expiresAt)}`.replace(/ +/g, " "),
+            ),
+          ...pending.slice(-10).map((p) => `⏳ ${p.subject} ${where(p.subject)}`.trimEnd()),
+        ];
+        await this.send(chatId, lines.join("\n"));
         break;
       }
       case "/grant": {

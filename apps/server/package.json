@@ -9,11 +9,12 @@
     "lint": "biome check src"
   },
   "dependencies": {
-    "@key-master/core": "workspace:*",
     "@hono/node-server": "^1.19.0",
+    "@key-master/core": "workspace:*",
     "better-sqlite3": "^12.4.1",
     "drizzle-orm": "^0.44.5",
     "hono": "^4.9.0",
+    "maxmind": "^4.3.29",
     "ulid": "^3.0.1",
     "yaml": "^2.8.1",
     "zod": "^4.1.0"

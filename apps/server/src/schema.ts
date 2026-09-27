@@ -111,3 +111,9 @@ export const loginCodes = sqliteTable("login_codes", {
   expiresAt: integer("expires_at").notNull(),
   usedAt: integer("used_at"),
 });
+export const ipGeo = sqliteTable("ip_geo", {
+  ip: text().primaryKey(),
+  data: text({ mode: "json" }).$type<Record<string, string | null>>().notNull(),
+  source: text({ enum: ["online", "mmdb"] }).notNull(),
+  fetchedAt: integer("fetched_at").notNull(),
+});

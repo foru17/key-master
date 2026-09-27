@@ -62,3 +62,10 @@ ingest: {}
 #   nginx_log: data/nginx-access.jsonl
 admin:
   allowed_cidrs: [127.0.0.1/32, "::1/128"]
+# Source details for humans (location / network of a requesting IP). Off by default: nothing is sent anywhere.
+geo:
+  provider: off # off | online | mmdb
+  online_url: "" # e.g. https://geo.example.com/lookup ({ip} placeholder, otherwise ?ip= is appended)
+  mmdb_dir: "" # directory with GeoLite2-City.mmdb and GeoLite2-ASN.mmdb
+  cache_days: 7
+  timeout_ms: 2500

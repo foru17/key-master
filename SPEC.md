@@ -65,6 +65,26 @@ HEAD / Range / If-None-Match must not bypass the decision: evaluate first, then 
 `surfboard`, `curl`, `wget`, `python`, `browser` (`mozilla/` and `Accept` contains `text/html`), else `unknown`.
 Table-driven tests with real UA samples.
 
+### Client description and source details (display only)
+
+Decisions only ever use `client_family`. For humans, `describeUserAgent(ua)` (packages/core) returns
+`{ kind, name, version, os, osVersion, device, label }` with `kind` one of `proxy`, `browser`, `system`
+(e.g. Apple WebKit networking / CFNetwork apps), `tool` (curl, scripts, HTTP libraries), `preview` (chat link
+previews), `crawler`, `scanner`, `unknown`. Scanners, crawlers and previews are matched before browsers because
+they embed browser tokens. Darwin kernel versions are shown verbatim, never mapped to marketing versions.
+`ipScope(ip)` classifies `public`, `private`, `loopback`, `cgnat` (100.64.0.0/10 and the Tailscale ULA
+fd7a:115c:a1e0::/48), `link_local`, `reserved`, `invalid`.
+
+Source details (`geo`, apps/server) are opt-in: `provider: off` (default) sends nothing anywhere. `online`
+GETs `online_url` (`{ip}` placeholder, otherwise `?ip=` is appended) and reads the JSON fields `country`,
+`country_name`, `city`, `asn`, `as_name`, `as_domain`, `continent`, `reserved`. `mmdb` reads local
+`GeoLite2-City.mmdb` + `GeoLite2-ASN.mmdb` from `mmdb_dir`, so no address leaves the host. Only `public`
+addresses are ever looked up. Results are cached in SQLite (`ip_geo`, `cache_days`), concurrent lookups for one
+address are merged, at most 4 run at once, failures cool down for 30 minutes. Telegram approval messages wait at
+most `timeout_ms` for a lookup and are sent without location otherwise; admin lists read the cache only and fill
+in on the next poll. Admin JSON adds `ipInfo` (requests, approvals, grants, overview IPs) and `client`
+(requests, approvals); resources add `requests24h`, `denied24h`, `lastRequestAt`.
+
 ## Denied responses (never 2xx, never a config body)
 
 Proxy clients replace their whole node list when a subscription returns 200, so a "notice node" config would wipe

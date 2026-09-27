@@ -13,7 +13,16 @@ import {
   Timestamp,
   useToast,
 } from "./components";
-import type { Issued, Pending, Settings } from "./types";
+import {
+  ClientBadge,
+  flag,
+  formatDuration,
+  IpBadge,
+  networkLabel,
+  ScopeChip,
+  useLocation,
+} from "./identity";
+import type { IpInfo, Issued, Pending, Settings } from "./types";
 export function ApprovalRow({
   item,
   onIssued,
@@ -29,17 +38,29 @@ export function ApprovalRow({
     if (data.secret) onIssued(data as Issued);
   });
   const durations = settings.data?.durations.options ?? [600, 3600];
+  const [ip, family] = item.subject.split("|");
+  const place = useLocation(item.ipInfo);
+  const network = networkLabel(item.ipInfo);
   return (
     <div className="approval-item">
       <div className="approval-identity">
         <span className="pending-mark">
           <Clock3 size={17} />
         </span>
-        <div>
-          <strong className="mono">{item.subject.split("|")[0]}</strong>
-          <p>
-            <span>{item.subject.split("|")[1]}</span>
-            <span className="dot">·</span>
+        <div className="approval-body">
+          <div className="approval-title">
+            <strong className="mono">{ip}</strong>
+            {item.ipInfo && item.ipInfo.scope !== "public" ? (
+              <ScopeChip info={item.ipInfo} />
+            ) : place ? (
+              <span className="approval-origin">
+                {flag(item.ipInfo?.country)} {place}
+              </span>
+            ) : null}
+          </div>
+          {network && <p className="approval-network">{network}</p>}
+          <p className="approval-meta">
+            <ClientBadge client={item.client} fallback={family} />
             <code>{item.slugs.join(", ")}</code>
           </p>
         </div>
@@ -91,7 +112,7 @@ export function PendingList({ items }: { items: Pending[] }) {
   );
 }
 export function Approvals() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const query = useData<{
     pending: Pending[];
     recent: {
@@ -101,6 +122,7 @@ export function Approvals() {
       actor: string;
       durationS: number;
       ts: number;
+      ipInfo?: IpInfo | null;
     }[];
   }>("approvals");
   return (
@@ -127,9 +149,10 @@ export function Approvals() {
                 <div className="data-list">
                   {query.data.recent.map((row) => (
                     <div className="data-row" key={row.id}>
-                      <code>{row.subject}</code>
+                      <IpBadge ip={row.subject.split("|")[0] ?? row.subject} info={row.ipInfo} />
                       <span>
-                        {t(row.action, { defaultValue: row.action })} · {row.durationS}s
+                        {t(row.action, { defaultValue: row.action })} ·{" "}
+                        {formatDuration(row.durationS, i18n.language)}
                       </span>
                       <span className="muted">{row.actor}</span>
                       <Timestamp value={row.ts} />

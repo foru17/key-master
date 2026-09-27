@@ -1,3 +1,26 @@
+# IP origin, client details and resources list — UI acceptance 2026-09-27
+
+VERDICT: PASS
+
+Preview: `scripts/preview.mjs` (preview-only IP origin table for documentation ranges, extra example clients and
+resources); automated suite `pnpm test:ui` → **10 passed**. Baseline: `git HEAD` screenshots in `docs/screenshots/`.
+
+| Check | Observed result |
+| --- | --- |
+| Dark contrast | Suite contrast scan reports zero text below 4.5:1 in 1440/390 × light/dark for requests, drawer, approvals, grants, resources, overview. The first run caught the "Public" policy pill at 4.31:1; its tint was lowered before this verdict. |
+| Controls and wrapping | Resource rows keep one line per cell at 1440; tablet hides size/last-request columns; phone cards group stats in one indented line, switch sits beside the policy pill. No control text wraps. |
+| Overflow and zoom | `scrollWidth <= innerWidth` on every captured view; viewport still permits zoom. |
+| Dialogs | Request drawer and resource edit dialog stay in place; the row "More actions" menu is anchored to its trigger (CSS anchor positioning, bottom-right fallback). Destructive actions use in-page confirm popovers. |
+| Visual tone | Resources moved from tall cards with three large buttons per row to a compact table with policy pills, traffic, last request, size, switch and an overflow menu; toolbar adds search, policy segments with counts and a summary. |
+| Baseline diff | No feature removed: edit / disable / enable / delete remain (disable and enable via the switch, delete via the menu); the content fingerprint moved from a per-row disclosure into the edit dialog and "Copy SHA-256"; request drawer keeps raw UA, headers, grant and block actions, and gains IP origin and parsed client sections. |
+| Behavior | Switch off → confirm → "Disabled"; switch on → "Enabled"; menu Delete → confirm → row removed; policy segment "Token only" shows only token-only rows; search filters by path/source and offers "Clear filters"; "Copy path" writes the slug to the clipboard; "View requests" opens `/requests?resource=<slug>` whose rows show the IPv6 origin (flag, place, network) and parsed client label. |
+| Test change | Sidebar sticky test now tolerates < 1 px (sub-pixel layout heights left it at −0.19 px after scrolling to the end). |
+
+Screenshots: `docs/screenshots/{requests,requests-drawer,approvals,grants,resources,overview}-{1440,390}-{light,dark}.png`;
+acceptance copies `.ui-acceptance/2026-09-27/ip-ua/<page>-{desktop,mobile,dark,mobile-dark}.png` (ignored by Git).
+
+---
+
 # Admin fixes acceptance — 2026-09-27
 
 Verified on `feat/admin`; baseline `768eab2`. Changes are committed locally with Codex co-author signatures. No push performed.

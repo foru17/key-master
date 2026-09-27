@@ -6,6 +6,7 @@ import { formatTimestamp } from "../../../packages/core/src/time";
 import { useData } from "./api";
 import { PendingList } from "./approvals";
 import { Button, Empty, ErrorBox, PageHeading, Skeleton } from "./components";
+import { IpBadge } from "./identity";
 import type { Overview as OverviewData } from "./types";
 export function Overview() {
   const { t, i18n } = useTranslation();
@@ -179,7 +180,14 @@ export function Overview() {
                     items.map((item, i) => (
                       <div className="ranking-row" key={item.label}>
                         <span className="rank">{i + 1}</span>
-                        <span className={label === "topIps" ? "mono" : ""}>{item.label}</span>
+                        {label === "topIps" ? (
+                          <IpBadge
+                            ip={item.label}
+                            info={"ipInfo" in item ? item.ipInfo : undefined}
+                          />
+                        ) : (
+                          <span>{item.label}</span>
+                        )}
                         <div className="mini-meter">
                           <i style={{ width: `${(item.count / (items[0]?.count ?? 1)) * 100}%` }} />
                         </div>
