@@ -11,10 +11,14 @@
     "build": "pnpm -r build",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "start": "node --env-file-if-exists=.env apps/server/dist/index.js"
+    "start": "node --env-file-if-exists=.env apps/server/dist/index.js",
+    "seed": "pnpm --filter @key-master/core build && pnpm --filter @key-master/server build && node apps/server/dist/seed.js",
+    "preview:admin": "node scripts/preview.mjs",
+    "test:ui": "playwright test"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.0",
+    "@playwright/test": "^1.63.0",
     "@types/node": "^22.0.0",
     "typescript": "~5.9.2",
     "vitest": "^3.2.4"

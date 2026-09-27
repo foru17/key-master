@@ -10,7 +10,8 @@
     "id": "ui",
     "task": "Seven bilingual responsive pages and shared denial tokens",
     "verification": "Admin build, browser behaviors, desktop/mobile light/dark screenshots",
-    "passes": false
+    "passes": true,
+    "evidence": "Admin TypeScript/Vite build exit 0; Playwright 5 passed; 36 screenshots individually reviewed, no overflow and no text contrast failures"
   },
   {
     "id": "seed",
