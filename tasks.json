@@ -66,6 +66,7 @@
     "id": "acceptance",
     "task": "Adversarial final verification and identifier scan",
     "verification": "pnpm install && pnpm -r test && pnpm -r build; pnpm lint; requested grep is empty",
-    "passes": false
+    "passes": true,
+    "evidence": "pnpm install, recursive tests (168 core + 66 server), recursive build and lint exit 0; final Docker image healthy with repository bind mount, curl health 200, UID 1000; requested grep empty (exit 1); gitleaks no leaks"
   }
 ]
