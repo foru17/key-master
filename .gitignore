@@ -10,5 +10,6 @@ data/
 coverage/
 .ui-acceptance/
 .verification/
+.test-data/
 *.log
 .DS_Store

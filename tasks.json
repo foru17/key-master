@@ -10,7 +10,8 @@
     "id": "server",
     "task": "SQLite migrations, validated configuration, resource gateway, audit, nginx ingest",
     "verification": "In-memory SQLite gateway and ingestion tests; server TypeScript build",
-    "passes": false
+    "passes": true,
+    "evidence": "Server Vitest: 35 passed; TypeScript build exit 0"
   },
   {
     "id": "telegram",
