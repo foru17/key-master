@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.db
+*.db-*
+config.yaml
+data/
+coverage/
+.ui-acceptance/
+.verification/
+*.log
+.DS_Store

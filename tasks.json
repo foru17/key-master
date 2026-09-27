@@ -1,0 +1,39 @@
+[
+  {
+    "id": "core",
+    "task": "Workspace, strict TypeScript, Biome, pure decision/client/token/denial logic",
+    "verification": "pnpm --filter @key-master/core test && pnpm --filter @key-master/core build",
+    "passes": true,
+    "evidence": "Vitest: 164 passed; TypeScript build exit 0"
+  },
+  {
+    "id": "server",
+    "task": "SQLite migrations, validated configuration, resource gateway, audit, nginx ingest",
+    "verification": "In-memory SQLite gateway and ingestion tests; server TypeScript build",
+    "passes": false
+  },
+  {
+    "id": "telegram",
+    "task": "Owner-only polling, deduplicated approvals, device tokens and commands",
+    "verification": "Mock Telegram tests including unauthorized updates, callbacks and commands",
+    "passes": false
+  },
+  {
+    "id": "admin",
+    "task": "React 19 + Tailwind 4 placeholder served at /admin",
+    "verification": "Vite build, server static test, desktop/mobile/dark screenshots",
+    "passes": false
+  },
+  {
+    "id": "delivery",
+    "task": "Docker, compose, examples, English documentation, MIT license",
+    "verification": "Docker build and compose healthcheck with example environment",
+    "passes": false
+  },
+  {
+    "id": "acceptance",
+    "task": "Adversarial final verification and identifier scan",
+    "verification": "pnpm install && pnpm -r test && pnpm -r build; pnpm lint; requested grep is empty",
+    "passes": false
+  }
+]

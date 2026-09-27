@@ -1,0 +1,24 @@
+{
+  "name": "@key-master/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json",
+    "lint": "biome check src"
+  },
+  "dependencies": {
+    "@key-master/core": "workspace:*",
+    "@hono/node-server": "^1.19.0",
+    "better-sqlite3": "^12.4.1",
+    "drizzle-orm": "^0.44.5",
+    "hono": "^4.9.0",
+    "ulid": "^3.0.1",
+    "yaml": "^2.8.1",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13"
+  }
+}
