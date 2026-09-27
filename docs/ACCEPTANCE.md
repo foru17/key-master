@@ -1,4 +1,88 @@
-# Phase-one acceptance
+# Phase-two acceptance
+
+Verified on 2026-09-27 on branch `feat/admin`, created from `feat/phase-one`. No push performed.
+
+## Final commands and observed results
+
+| Command | Observed result |
+| --- | --- |
+| `pnpm install && pnpm -r test && pnpm -r build && pnpm lint` | Exit 0; 168 core + 111 server tests passed, admin strict typecheck passed; all package builds passed; lint has zero errors/warnings and one existing configuration deprecation info |
+| `pnpm test:ui` | Exit 0; 5 browser tests passed, 36 screenshots regenerated, contrast/overflow assertions passed |
+| `pnpm seed` | Exit 0; 4 resources, 5 tokens, 6 grants, 1,143 requests, 3 pending approvals |
+| `KM_SEED_DB=.verification/seed-check.db pnpm seed` | Exit 0; independent SQLite count queries confirmed every generated total |
+| `docker build -t key-master:admin .` | Exit 0; Node 22 build, tests and lint inside image; image SHA-256 `22463158f64bcd619e5cda95d490fe7867830e3d842b9e4e0df4591a1a8885b8` |
+| `docker system prune -f` | Authorized recovery after disk-full failure; reclaimed 12.86 GB; no volume deletion option used |
+| `curl -fsS -i http://localhost:4180/healthz` | Container HTTP 200, body `{"status":"ok"}`, request ID header present |
+| Container-local requests | `/admin/overview` 200; unauthenticated `/api/admin/overview` 401; `/private` 403 |
+| `docker exec key-master-admin-check id` | `uid=1000(node) gid=1000(node) groups=1000(node)` |
+| Requested recursive identifier scan | No output, exit 1 (no matches), including ignored local artifacts; generated command logs use `$WORKSPACE` in place of the machine path |
+| `git diff --check` | Exit 0 |
+
+Docker smoke testing used an ephemeral tmpfs at `/app/data`; no named volumes or existing deployment settings were changed. Telegram was verified with mock transport, not a live owner chat. There are no unresolved implementation or acceptance blockers.
+
+## UI gate
+
+VERDICT: PASS
+
+- Playwright: **5 passed (13.7s)** against the real Hono server and SQLite, with only Telegram delivery mocked. Settings failure is deliberately injected to verify rollback.
+- **36 screenshots**: nine views × desktop 1440 / mobile 390 × light / dark. Desktop viewport is 1440×900; mobile is 390×844. Full-page capture is used for long pages; open dialogs use viewport captures.
+- All screenshots were opened and visually reviewed. No clipped controls, drifting dialogs, horizontal document overflow or unreadable text were found in the final set. Native dialogs trap focus; viewport zoom remains enabled.
+- Computed rendered text and form-control foreground/background pairs pass **4.5:1**. The check resolves mixed colors through canvas before calculating WCAG luminance. Placeholder text uses the tested muted token; faint is never used for readable text. Contrast reports are generated under ignored `.verification/contrast-*.json`.
+- Light brass-on-brass initially measured 4.01:1. Fixed count badges to use the existing ink token, preserving every specified color token. Re-ran all screenshots and contrast checks.
+- Fixed the device-token copy dialog lifetime so a pending-list refresh cannot discard its one-time secret. Tokens are not retained in query/mutation caches.
+- Fixed explicit form-label association for populated textareas; resource editing now passes browser automation.
+- Reduced-motion styles remove the skeleton, count and switch animations. Light/dark/system selections and live OS theme changes are exercised in the browser.
+- Public entertainment compliance notice: not applicable to this private administration product.
+
+## Behavior evidence
+
+| Workflow | Actual observation |
+| --- | --- |
+| Telegram login | Request-code endpoint writes a mock-delivered six-digit code; UI auto-distributes input, verifies, and receives a secure server cookie |
+| Session and network policy | Table-driven server tests reject unauthenticated reads/mutations and disallowed CIDRs; expiry, logout, single-use codes and persistent brute-force limits pass |
+| Command palette | Command-K opens a dialog and IP search navigates to the filtered request view |
+| Theme and language | Dark, system + OS changes, Chinese and English labels switch correctly |
+| Tokens | Issue dialog returns a one-time secret, closing removes it from DOM; confirmed revoke updates the real database |
+| Grants | Create, edit duration, cancel revocation and confirm revocation all preserve the advertised behavior |
+| Resources | Create/edit plain content, disable, enable and delete succeed against real API/SQLite |
+| Settings | Notice preview changes live; save persists after reload; simulated failure rolls optimistic cache back |
+| Observe mode | Enabling changes a private resource response to 200; disabling restores 403; confirmation required before enabling |
+| Approvals | Allow, device-token issuance and deny resolve once; recent decisions and pending counts refresh |
+| Mobile | Drawer navigation works; audit rows become cards; horizontal document overflow assertions pass |
+| Server notice | Returns 403 with the same shared theme tokens, escaped contact details and request ID in all four captures |
+
+## Baseline comparison
+
+Baseline recorded in `CLAUDE.md`: phase-one static placeholder and denial page. Opened all six baseline images under `.ui-acceptance/2026-09-27/` and compared them with the new captures.
+
+| Baseline behavior | Phase-two result |
+| --- | --- |
+| CIDR-restricted static admin page | Preserved CIDR gate; added session-protected APIs and popup login |
+| Bilingual placeholder copy | Replaced with seven fully translated working pages; no previous interactive feature was removed |
+| Light/dark informational page | Preserved and extended to explicit theme selection and OS-following mode |
+| Responsive layout with zoom allowed | Preserved; added mobile navigation sheets and audit cards |
+| Denial notice, contact, request ID, timestamp, non-2xx | Preserved; colors now come from the shared theme source |
+| No telemetry / no paid services | Preserved; fonts are bundled locally |
+
+No functional regression or missing baseline feature was identified. The placeholder hero and blue palette were intentionally replaced by the supplied phase-two design contract.
+
+## Screenshots
+
+- overview: [1440 light](screenshots/overview-1440-light.png), [1440 dark](screenshots/overview-1440-dark.png), [390 light](screenshots/overview-390-light.png), [390 dark](screenshots/overview-390-dark.png)
+- requests-drawer: [1440 light](screenshots/requests-drawer-1440-light.png), [1440 dark](screenshots/requests-drawer-1440-dark.png), [390 light](screenshots/requests-drawer-390-light.png), [390 dark](screenshots/requests-drawer-390-dark.png)
+- tokens-issue: [1440 light](screenshots/tokens-issue-1440-light.png), [1440 dark](screenshots/tokens-issue-1440-dark.png), [390 light](screenshots/tokens-issue-390-light.png), [390 dark](screenshots/tokens-issue-390-dark.png)
+- login: [1440 light](screenshots/login-1440-light.png), [1440 dark](screenshots/login-1440-dark.png), [390 light](screenshots/login-390-light.png), [390 dark](screenshots/login-390-dark.png)
+- settings-preview: [1440 light](screenshots/settings-preview-1440-light.png), [1440 dark](screenshots/settings-preview-1440-dark.png), [390 light](screenshots/settings-preview-390-light.png), [390 dark](screenshots/settings-preview-390-dark.png)
+- approvals: [1440 light](screenshots/approvals-1440-light.png), [1440 dark](screenshots/approvals-1440-dark.png), [390 light](screenshots/approvals-390-light.png), [390 dark](screenshots/approvals-390-dark.png)
+- grants: [1440 light](screenshots/grants-1440-light.png), [1440 dark](screenshots/grants-1440-dark.png), [390 light](screenshots/grants-390-light.png), [390 dark](screenshots/grants-390-dark.png)
+- resources: [1440 light](screenshots/resources-1440-light.png), [1440 dark](screenshots/resources-1440-dark.png), [390 light](screenshots/resources-390-light.png), [390 dark](screenshots/resources-390-dark.png)
+- denied: [1440 light](screenshots/denied-1440-light.png), [1440 dark](screenshots/denied-1440-dark.png), [390 light](screenshots/denied-390-light.png), [390 dark](screenshots/denied-390-dark.png)
+
+Machine gate copies are also in `.ui-acceptance/phase-two/`. No screenshot contains an issued token or login code.
+
+---
+
+# Phase-one acceptance (historical baseline)
 
 Verified on 2026-09-27. Implementation branch: `feat/phase-one`. No push was performed.
 

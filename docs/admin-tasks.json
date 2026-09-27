@@ -24,6 +24,7 @@
     "id": "delivery",
     "task": "Adversarial review, documentation and full delivery checks",
     "verification": "Install, recursive tests/build, lint, Docker, identifier scan",
-    "passes": false
+    "passes": true,
+    "evidence": "Exact install/test/build/lint chain exit 0 (279 unit tests); Docker image built and HTTP 200/401/403 smoke checks passed; 36 screenshots reviewed; requested grep no output (exit 1); git diff --check exit 0"
   }
 ]
