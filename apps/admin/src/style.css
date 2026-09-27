@@ -679,6 +679,10 @@ kbd {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.audit-row .timestamp {
+  white-space: normal;
+  line-height: 1.5;
+}
 .audit-row .mono,
 .audit-row code {
   font-size: 12px;

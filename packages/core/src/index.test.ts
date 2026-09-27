@@ -239,3 +239,24 @@ describe("denied responses", () => {
     expect(await response.text()).toBe("404 Not Found\n");
   });
 });
+
+describe("denial timezones", () => {
+  it.each([
+    [undefined, "en", "09/27/2026, 07:22:09 (UTC)"],
+    ["Asia/Singapore", "zh-CN", "2026/09/27 15:22:09 (Asia/Singapore)"],
+    ["America/New_York", "en", "09/27/2026, 03:22:09 (America/New_York)"],
+  ])("formats %s in %s", async (timeZone, acceptLanguage, expected) => {
+    const iso = "2026-09-27T07:22:09.000Z";
+    const response = deniedResponse({
+      family: "browser",
+      requestId: "EXAMPLE",
+      now: Date.parse(iso),
+      acceptLanguage,
+      ...(timeZone ? { timeZone } : {}),
+    });
+    expect(response.status).toBe(403);
+    const body = await response.text();
+    expect(body).toContain(expected);
+    expect(body).toContain(`datetime="${iso}" title="${iso}"`);
+  });
+});

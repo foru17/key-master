@@ -302,3 +302,23 @@ describe("nginx ingestion", () => {
     expect(store.db.select().from(schema.requests).all()).toHaveLength(3);
   });
 });
+
+describe("notice timezone", () => {
+  it.each(["UTC", "Asia/Singapore", "America/New_York", "Etc/GMT+8"])("accepts %s", (timezone) => {
+    expect(configSchema.parse({ notice: { timezone } }).notice.timezone).toBe(timezone);
+  });
+  it.each(["", "Invalid/Zone", "+08:00", "<script>"])("rejects %s", (timezone) => {
+    expect(configSchema.safeParse({ notice: { timezone } }).success).toBe(false);
+  });
+  it.each(["/private", "/admin"])("uses configured timezone on %s", async (path) => {
+    config.notice.timezone = "Asia/Singapore";
+    const response = await get(path, {
+      headers: { "user-agent": "Mozilla/5.0", accept: "text/html", "accept-language": "zh" },
+    });
+    expect(response.status).toBe(403);
+    const body = await response.text();
+    expect(body).toContain("(Asia/Singapore)");
+    expect(body).toContain(`title="${new Date(now).toISOString()}"`);
+    expect(body).toContain("访问需要管理员批准");
+  });
+});

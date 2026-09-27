@@ -1,10 +1,11 @@
 import type { IncomingMessage } from "node:http";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { restoreSettings } from "./admin.js";
 import { createApp } from "./app.js";
 import { createLoginCode } from "./auth.js";
 import { type Config, configSchema } from "./config.js";
-import { openStore, type Store, syncResources } from "./db.js";
+import { openStore, type Store, setState, syncResources } from "./db.js";
 import * as schema from "./schema.js";
 
 let store: Store;
@@ -358,4 +359,16 @@ it("rejects expired token issuance and invalid settings without modifying state"
       .status,
   ).toBe(400);
   expect(config.observe_mode).toBe(false);
+});
+
+it("legacy settings retain the configured notice timezone", () => {
+  config.notice.timezone = "Asia/Singapore";
+  const { timezone: _timezone, ...notice } = config.notice;
+  setState(
+    store,
+    "admin_settings",
+    JSON.stringify({ observe_mode: false, durations: config.durations, notice }),
+  );
+  restoreSettings(store, config);
+  expect(config.notice.timezone).toBe("Asia/Singapore");
 });

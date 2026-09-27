@@ -2,6 +2,7 @@ import { Activity, ArrowDownLeft, ArrowUpRight, Clock3, ShieldCheck } from "luci
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
+import { formatTimestamp } from "../../../packages/core/src/time";
 import { useData } from "./api";
 import { PendingList } from "./approvals";
 import { Button, Empty, ErrorBox, PageHeading, Skeleton } from "./components";
@@ -106,7 +107,7 @@ export function Overview() {
                     const d = (s.denied / max) * 145;
                     return (
                       <g key={s.ts}>
-                        <title>{`${new Date(s.ts).toLocaleString(i18n.language)}: ${s.allowed} ${t("allowed")}, ${s.denied} ${t("denied")}`}</title>
+                        <title>{`${formatTimestamp(s.ts, i18n.language)}: ${s.allowed} ${t("allowed")}, ${s.denied} ${t("denied")} · ${new Date(s.ts).toISOString()}`}</title>
                         <rect
                           x={i * width + width * 0.17}
                           y={168 - h}
@@ -135,14 +136,18 @@ export function Overview() {
                       i % Math.ceil(data.series.length / 5) === 0 || i === data.series.length - 1,
                   )
                   .map((s) => (
-                    <span key={s.ts}>
+                    <time
+                      key={s.ts}
+                      dateTime={new Date(s.ts).toISOString()}
+                      title={new Date(s.ts).toISOString()}
+                    >
                       {new Date(s.ts).toLocaleString(
                         i18n.language,
                         range === "24h"
-                          ? { hour: "2-digit", minute: "2-digit", hour12: false }
+                          ? { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }
                           : { month: "short", day: "numeric" },
                       )}
-                    </span>
+                    </time>
                   ))}
               </div>
             </section>

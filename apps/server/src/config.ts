@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { validCidr } from "@key-master/core";
+import { validCidr, validTimeZone } from "@key-master/core";
 import { parse } from "yaml";
 import { z } from "zod";
 
@@ -85,12 +85,14 @@ export const configSchema = z
       .default({ grant_default: 600, options: [600, 3600], block: 3600, pending: 600 }),
     notice: z
       .object({
+        timezone: z.string().refine(validTimeZone, "Invalid IANA timezone").default("UTC"),
         contact_text: z.string().default(""),
         contact_url: z.union([httpUrl, z.literal("")]).default(""),
         footer: z.string().default(""),
         not_found_body: z.string().default("404 Not Found\n"),
       })
       .default({
+        timezone: "UTC",
         contact_text: "",
         contact_url: "",
         footer: "",

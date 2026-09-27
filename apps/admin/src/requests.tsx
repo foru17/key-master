@@ -67,9 +67,14 @@ export function RequestDrawer({ id, onClose }: { id: string; onClose: () => void
             <code>{row.path}</code>
           </div>
           <dl className="detail-list">
+            <div>
+              <dt>{t("time")}</dt>
+              <dd>
+                <Timestamp value={row.ts} />
+              </dd>
+            </div>
             {[
               [t("requestId"), row.id],
-              [t("time"), new Date(row.ts).toISOString()],
               [t("client"), row.clientFamily],
               [t("status"), `${row.method} · ${row.status}`],
               [t("latency"), `${row.latencyMs} ms · ${row.bytes} B`],

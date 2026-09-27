@@ -2,12 +2,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Check, Send, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { formatTimestamp } from "../../../packages/core/src/time";
 import { api, useData } from "./api";
 import { Confirm, ErrorBox, Field, PageHeading, Skeleton, useToast } from "./components";
 import type { Settings as SettingsData } from "./types";
 
 function SettingsForm({ initial }: { initial: SettingsData }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [draft, setDraft] = useState(initial);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -139,7 +140,18 @@ function SettingsForm({ initial }: { initial: SettingsData }) {
                 <div className="notice-meta">
                   <span>{t("requestId")}</span>
                   <code>01EXAMPLE7REQUEST</code>
-                  <code>2026-01-01T12:00:00Z</code>
+                  <time
+                    className="mono"
+                    dateTime="2026-01-01T12:00:00.000Z"
+                    title="2026-01-01T12:00:00.000Z"
+                  >
+                    {formatTimestamp(
+                      Date.parse("2026-01-01T12:00:00Z"),
+                      i18n.language,
+                      draft.notice.timezone,
+                    )}{" "}
+                    ({draft.notice.timezone})
+                  </time>
                 </div>
                 <footer>{draft.notice.footer || t("noticeSample")}</footer>
               </div>

@@ -40,7 +40,12 @@ const settingsInput = z.object({
 });
 export function restoreSettings(store: Store, config: Config) {
   const saved = getState(store, "admin_settings");
-  if (saved) Object.assign(config, settingsInput.parse(JSON.parse(saved)));
+  if (saved) {
+    const raw = JSON.parse(saved);
+    const parsed = settingsInput.parse(raw);
+    if (raw.notice?.timezone === undefined) parsed.notice.timezone = config.notice.timezone;
+    Object.assign(config, parsed);
+  }
 }
 export function createAdmin(options: {
   store: Store;

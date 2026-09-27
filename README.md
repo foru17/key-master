@@ -135,6 +135,8 @@ Every application response, including health/admin/error responses, has a ULID r
 
 ## Design notes
 
+- Admin timestamps use the browser local timezone and selected language, include year/seconds, and expose ISO values on hover. Chart axes stay compact. Server denial pages and their settings previews use `notice.timezone` (validated IANA name, default `UTC`) and label the zone. Persisted UI settings override YAML, including the timezone; legacy settings without a timezone inherit the configured value.
+
 - `docs/DESIGN.md` is the visual contract. Light brass foreground/background alone yields only 4.01:1, so count badges use the existing ink token over brass. Muted rather than faint is used for text and placeholders. Server denial HTML and the SPA import the same theme token source.
 - Overview totals count resource traffic, excluding admin/API/health traffic. Audit queries still expose every recorded request. Pending/recent list windows are bounded to 200/100, management lists to 1,000; requests have database pagination and browser virtualization.
 - Settings written in the UI override YAML on restart. Resources explicitly declared in YAML are still synced at boot, so edit the YAML too when changing those entries permanently. Requests persist only Accept, Accept-Language, Range and If-None-Match; cookie, authorization and query tokens are never copied into details.

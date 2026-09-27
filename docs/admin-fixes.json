@@ -17,7 +17,8 @@
     "id": "time",
     "task": "Localize admin timestamps and configure the denied notice timezone",
     "verification": "Vitest timezone cases and Playwright browser timezone/language assertions",
-    "passes": false
+    "passes": true,
+    "evidence": "Vitest: 175 core + 122 server passed; recursive build exit 0; Playwright Singapore/New York timezone and en/zh cases: 2 passed."
   },
   {
     "id": "tokens",

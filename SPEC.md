@@ -67,6 +67,7 @@ Table-driven tests with real UA samples.
 Proxy clients replace their whole node list when a subscription returns 200, so a "notice node" config would wipe
 the user's nodes. Always non-2xx so clients keep the cached copy.
 - `browser`: 403 `text/html` notice page (i18n zh/en by `Accept-Language`, light/dark via `prefers-color-scheme`),
+  formats time using `notice.timezone` (IANA, default UTC), labels the zone, and exposes ISO on hover;
   shows: "access requires the administrator's approval", request id, time, contact line from config
   (`notice.contact_text`, `notice.contact_url`; defaults: generic "please contact the administrator", no URL).
   `Cache-Control: no-store`.
@@ -93,6 +94,7 @@ the user's nodes. Always non-2xx so clients keep the cached copy.
 - Pages: Overview (requests today, denied, pending, active grants), Audit (filter by time, ip, client family,
   resource, decision; request detail drawer), Grants (list, revoke, create), Tokens (issue, revoke, last used),
   Resources (list/create/edit/disable), Settings (observe mode toggle, durations, notice texts).
+- Admin timestamps use the browser local timezone and current UI language, with ISO values on hover.
 - Modern SaaS look, light + dark (both must pass contrast), responsive (phone width), zh/en.
 
 ## Nginx front (docs/nginx.md, example only)
@@ -107,7 +109,7 @@ without a valid token are proxied to key-master. Provide the example config with
 `KM_TOKEN_PEPPER` (optional). Keys: `public_base_url`, `listen`, `db_path`, `file_root`, `internal_cidrs`,
 `trusted_proxies` (for X-Forwarded-For / X-Real-IP), `observe_mode` (allow everything, still notify + audit),
 `telegram.{mode, owner_chat_ids, webhook_secret}`, `durations.{grant_default, options, block}`,
-`notice.{contact_text, contact_url, footer}`, `resources[]`, `ingest.nginx_log`, `admin.allowed_cidrs`.
+`notice.{contact_text, contact_url, footer, timezone}`, `resources[]`, `ingest.nginx_log`, `admin.allowed_cidrs`.
 
 ## Acceptance (automated where possible)
 

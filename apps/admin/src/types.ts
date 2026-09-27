@@ -57,7 +57,13 @@ export type Resource = {
 export type Settings = {
   observe_mode: boolean;
   durations: { grant_default: number; options: [number, number]; block: number; pending: number };
-  notice: { contact_text: string; contact_url: string; footer: string; not_found_body: string };
+  notice: {
+    timezone: string;
+    contact_text: string;
+    contact_url: string;
+    footer: string;
+    not_found_body: string;
+  };
   telegram: { mode: string; connected: boolean; username: string | null; ownerChats: string[] };
   version: string;
 };

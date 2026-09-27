@@ -21,6 +21,7 @@ durations:
   block: 3600
   pending: 600
 notice:
+  timezone: UTC # IANA timezone for server-rendered notices; admin uses browser local time.
   contact_text: "Please contact the administrator / 请联系管理员"
   contact_url: ""
   footer: ""

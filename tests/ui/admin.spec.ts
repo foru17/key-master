@@ -312,3 +312,38 @@ test("brand has no decorative slash on desktop and mobile", async ({ page }) => 
   await page.getByRole("button", { name: "Open navigation", exact: true }).click();
   await expect(page.locator(".mobile-nav .brand")).toHaveText("key-master");
 });
+
+for (const timezoneId of ["Asia/Singapore", "America/New_York"])
+  test(`timestamps follow browser timezone and language: ${timezoneId}`, async ({ browser }) => {
+    const context = await browser.newContext({ timezoneId });
+    const page = await context.newPage();
+    await login(page);
+    await page.goto("/admin/requests?q=EXAMPLE_PENDING_REQUEST");
+    const stamp = page.locator(".audit-row time").first();
+    await expect(stamp).toBeVisible();
+    const iso = await stamp.getAttribute("datetime");
+    if (!iso) throw new Error("Missing ISO timestamp");
+    const expected = async (language: string) =>
+      page.evaluate(
+        ({ iso, language }) =>
+          new Intl.DateTimeFormat(language, {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hourCycle: "h23",
+          }).format(new Date(iso)),
+        { iso, language },
+      );
+    await expect(stamp).toHaveText(await expected("en"));
+    await expect(stamp).toHaveAttribute("title", iso);
+    await page.locator(".audit-row").first().click();
+    await expect(page.locator("dialog time")).toHaveText(await expected("en"));
+    await expect(page.locator("dialog time")).toHaveAttribute("title", iso);
+    await page.getByRole("button", { name: "Close", exact: true }).click();
+    await page.getByRole("button", { name: "中", exact: true }).click();
+    await expect(stamp).toHaveText(await expected("zh"));
+    await context.close();
+  });

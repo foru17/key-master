@@ -158,6 +158,11 @@ export function createApp(options: {
         family: detectClient(c.req.header("user-agent") ?? "", c.req.header("accept")),
         requestId: c.get("requestId"),
         now: clock(),
+        timeZone: config.notice.timezone,
+        acceptLanguage: c.req.header("accept-language") ?? "",
+        contactText: config.notice.contact_text,
+        contactUrl: config.notice.contact_url,
+        footer: config.notice.footer,
       });
     }
     const requested = c.req.path.replace(/^\/admin\/?/, "") || "index.html";
@@ -239,6 +244,7 @@ export function createApp(options: {
         now,
         notFound: result.decision === "not_found",
         notFoundBody: config.notice.not_found_body,
+        timeZone: config.notice.timezone,
         acceptLanguage: c.req.header("accept-language") ?? "",
         contactText: config.notice.contact_text,
         contactUrl: config.notice.contact_url,

@@ -112,7 +112,9 @@ function GrantRow({ item, onEdit }: { item: Grant; onEdit: () => void }) {
         <Pill value={status} />
         <p className="muted">
           {status === "active" ? (
-            `${Math.max(1, Math.ceil((item.expiresAt - Date.now()) / 60000))}m ${t("remaining")}`
+            <span
+              title={new Date(item.expiresAt).toISOString()}
+            >{`${Math.max(1, Math.ceil((item.expiresAt - Date.now()) / 60000))}m ${t("remaining")}`}</span>
           ) : (
             <Timestamp value={item.expiresAt} />
           )}
@@ -277,7 +279,7 @@ function TokenRow({ item }: { item: Token }) {
           }
         />
         <p className="muted">
-          {item.expiresAt ? <Timestamp value={item.expiresAt} /> : t("noExpiry")}
+          {item.expiresAt !== null ? <Timestamp value={item.expiresAt} /> : t("noExpiry")}
         </p>
       </div>
       <Confirm

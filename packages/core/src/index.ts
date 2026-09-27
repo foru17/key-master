@@ -1,6 +1,9 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import ipaddr from "ipaddr.js";
 import { themeCss } from "./theme.js";
+import { formatTimestamp } from "./time.js";
+
+export { validTimeZone } from "./time.js";
 
 export const clientFamilies = [
   "clash-verge",
@@ -191,6 +194,7 @@ export function deniedResponse(input: {
   contactText?: string;
   contactUrl?: string;
   footer?: string;
+  timeZone?: string;
 }): Response {
   const headers = { "X-Request-Id": input.requestId, "Cache-Control": "no-store" };
   if (input.notFound)
@@ -217,7 +221,10 @@ export function deniedResponse(input: {
   } catch {
     /* Omit invalid links. */
   }
-  const body = `<!doctype html><html lang="${zh ? "zh" : "en"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${notice}</title><style>${themeCss}*{box-sizing:border-box}body{font-family:Inter,-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;color:var(--ink);background:var(--paper);margin:0;min-height:100vh;display:grid;place-items:center;padding:24px}main{width:min(100%,580px);padding:clamp(24px,6vw,48px);border:1px solid var(--line);border-radius:16px;background:var(--surface)}small{color:var(--brass-text);font-size:13px}h1{font-size:28px;font-weight:600;line-height:1.4;text-wrap:balance}p{line-height:1.7;overflow-wrap:anywhere;color:var(--muted)}code{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--ink)}a{color:var(--sage-text)}footer{color:var(--muted);font-size:13px;margin-top:32px}</style></head><body><main><small>KEY MASTER · 403</small><h1>${notice}</h1><p>${url ? `<a href="${escapeHtml(url)}" rel="noopener noreferrer">${escapeHtml(contact)}</a>` : escapeHtml(contact)}</p><p>${zh ? "请求编号" : "Request ID"}<br><code>${escapeHtml(id)}</code></p><p>${escapeHtml(new Date(input.now).toISOString())}</p><footer>${escapeHtml(safeText(input.footer ?? ""))}</footer></main></body></html>`;
+  const iso = new Date(input.now).toISOString();
+  const timeZone = input.timeZone ?? "UTC";
+  const time = formatTimestamp(input.now, zh ? "zh-CN" : "en", timeZone);
+  const body = `<!doctype html><html lang="${zh ? "zh" : "en"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${notice}</title><style>${themeCss}*{box-sizing:border-box}body{font-family:Inter,-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;color:var(--ink);background:var(--paper);margin:0;min-height:100vh;display:grid;place-items:center;padding:24px}main{width:min(100%,580px);padding:clamp(24px,6vw,48px);border:1px solid var(--line);border-radius:16px;background:var(--surface)}small{color:var(--brass-text);font-size:13px}h1{font-size:28px;font-weight:600;line-height:1.4;text-wrap:balance}p{line-height:1.7;overflow-wrap:anywhere;color:var(--muted)}code{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--ink)}a{color:var(--sage-text)}footer{color:var(--muted);font-size:13px;margin-top:32px}</style></head><body><main><small>KEY MASTER · 403</small><h1>${notice}</h1><p>${url ? `<a href="${escapeHtml(url)}" rel="noopener noreferrer">${escapeHtml(contact)}</a>` : escapeHtml(contact)}</p><p>${zh ? "请求编号" : "Request ID"}<br><code>${escapeHtml(id)}</code></p><p><time datetime="${iso}" title="${iso}">${escapeHtml(time)} (${escapeHtml(timeZone)})</time></p><footer>${escapeHtml(safeText(input.footer ?? ""))}</footer></main></body></html>`;
   return new Response(body, {
     status: 403,
     headers: {

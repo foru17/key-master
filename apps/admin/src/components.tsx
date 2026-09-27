@@ -11,6 +11,7 @@ import {
   useState,
 } from "react";
 import { useTranslation } from "react-i18next";
+import { formatTimestamp } from "../../../packages/core/src/time";
 import type { Issued } from "./types";
 export const ToastContext = createContext<(message: string) => void>(() => {});
 export const useToast = () => useContext(ToastContext);
@@ -231,17 +232,11 @@ export function PageHeading({
 }
 export function Timestamp({ value }: { value: number | null }) {
   const { i18n, t } = useTranslation();
+  if (value === null) return <span className="mono">{t("never")}</span>;
+  const iso = new Date(value).toISOString();
   return (
-    <span className="mono">
-      {value
-        ? new Date(value).toLocaleString(i18n.language, {
-            month: "short",
-            day: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: false,
-          })
-        : t("never")}
-    </span>
+    <time className="mono timestamp" dateTime={iso} title={iso}>
+      {formatTimestamp(value, i18n.language)}
+    </time>
   );
 }
