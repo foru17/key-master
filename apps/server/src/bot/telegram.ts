@@ -1,12 +1,13 @@
-import { randomInt } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
-import { hashToken, normalizeIp } from "@key-master/core";
+import { normalizeIp } from "@key-master/core";
 import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import { ulid } from "ulid";
 import { z } from "zod";
 import type { PendingRequest } from "../app.js";
+import { recordPending, resolveApproval } from "../approval.js";
+import { createLoginCode } from "../auth.js";
 import type { Config, Secrets } from "../config.js";
-import { getState, issueToken, type Store, setState } from "../db.js";
+import { getState, type Store, setState } from "../db.js";
 import * as schema from "../schema.js";
 export interface TelegramApi {
   call(method: string, payload: Record<string, unknown>, signal?: AbortSignal): Promise<unknown>;
@@ -75,33 +76,23 @@ export class TelegramBot {
   private async send(chatId: string, text: string, extra: Record<string, unknown> = {}) {
     return this.api.call("sendMessage", { chat_id: chatId, text: text.slice(0, 3900), ...extra });
   }
-  async notify(request: PendingRequest): Promise<void> {
-    const subject = `${request.ip}|${request.family}`;
-    const pending = this.store.db.transaction((tx) => {
-      const existing = tx
-        .select()
-        .from(schema.pending)
-        .where(and(eq(schema.pending.subject, subject), gt(schema.pending.expiresAt, request.now)))
-        .get();
-      if (existing) {
-        if (existing.resolvedAt === null && !existing.slugs.includes(request.slug))
-          tx.update(schema.pending)
-            .set({ slugs: [...existing.slugs, request.slug] })
-            .where(eq(schema.pending.id, existing.id))
-            .run();
-        return null;
+  async sendLoginCode(code: string) {
+    let delivered = false;
+    for (const chatId of this.config.telegram.owner_chat_ids.slice(0, 20)) {
+      try {
+        await this.send(
+          chatId,
+          `${this.text("One-time login code (5 minutes)", "一次性登录验证码（5 分钟有效）")}: ${code}`,
+        );
+        delivered = true;
+      } catch {
+        this.event(chatId, "login_delivery_failed");
       }
-      const value = {
-        id: ulid(),
-        subject,
-        requestId: request.requestId,
-        slugs: [request.slug],
-        expiresAt: request.now + this.config.durations.pending * 1000,
-        messages: [] as { chatId: string; messageId: number }[],
-      };
-      tx.insert(schema.pending).values(value).run();
-      return value;
-    });
+    }
+    if (!delivered) throw new Error("Telegram unavailable");
+  }
+  async notify(request: PendingRequest): Promise<void> {
+    const pending = recordPending(this.store, this.config, request);
     if (!pending) return;
     const buttons = [
       {
@@ -202,51 +193,20 @@ export class TelegramBot {
             : action === "allow1"
               ? this.config.durations.options[1]
               : 0;
-      this.store.db.transaction((tx) => {
-        tx.update(schema.pending)
-          .set({ resolvedAt: now })
-          .where(eq(schema.pending.id, pending.id))
-          .run();
-        if (action === "device")
-          secret = issueToken(
-            this.store,
-            { kind: "device", label: pending.subject, scope: pending.slugs },
-            this.secrets.tokenPepper,
-            now,
-          ).secret;
-        else if (action === "deny")
-          tx.insert(schema.blocks)
-            .values({ subject: pending.subject, until: now + duration * 1000, reason: actor })
-            .onConflictDoUpdate({
-              target: schema.blocks.subject,
-              set: { until: now + duration * 1000, reason: actor },
-            })
-            .run();
-        else
-          tx.insert(schema.grants)
-            .values({
-              id: ulid(),
-              subjectKind: "ip_client",
-              subject: pending.subject,
-              scope: pending.slugs,
-              grantedBy: actor,
-              expiresAt: now + duration * 1000,
-              createdAt: now,
-            })
-            .run();
-        tx.insert(schema.approvals)
-          .values({
-            id: ulid(),
-            requestId: pending.requestId,
-            subject: pending.subject,
-            tgMessageId: msg?.message_id ?? null,
-            action: action === "device" ? "device_token" : action === "deny" ? "deny" : "allow",
-            actor,
-            durationS: duration,
-            ts: now,
-          })
-          .run();
-      });
+      const resolved = resolveApproval(
+        this.store,
+        this.secrets,
+        {
+          id: pending.id,
+          action: action === "device" ? "device_token" : action === "deny" ? "deny" : "allow",
+          duration,
+          actor,
+          ...(msg ? { messageId: msg.message_id } : {}),
+        },
+        now,
+      );
+      if (!resolved) return;
+      secret = resolved.token?.secret;
       const outcome =
         action === "device"
           ? this.text("Device token issued", "设备令牌已签发")
@@ -406,23 +366,10 @@ export class TelegramBot {
         break;
       }
       case "/login": {
-        const code = String(randomInt(0, 1000000)).padStart(6, "0");
-        this.store.db
-          .update(schema.loginCodes)
-          .set({ usedAt: now })
-          .where(isNull(schema.loginCodes.usedAt))
-          .run();
-        this.store.db
-          .insert(schema.loginCodes)
-          .values({
-            id: ulid(),
-            secretHash: hashToken(code, this.secrets.sessionSecret),
-            expiresAt: now + 300000,
-          })
-          .run();
+        const code = createLoginCode(this.store, this.secrets.sessionSecret, now);
         await this.send(
           chatId,
-          `${this.text("One-time code (5 minutes; admin login arrives in phase two)", "一次性验证码（5 分钟有效；管理登录将在第二阶段开放）")}: ${code}`,
+          `${this.text("One-time login code (5 minutes)", "一次性登录验证码（5 分钟有效）")}: ${code}`,
         );
         break;
       }

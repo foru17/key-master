@@ -1,0 +1,27 @@
+[
+  {
+    "id": "api",
+    "task": "Secure sessions, shared approvals and complete admin API",
+    "verification": "Table-driven Vitest and server build",
+    "passes": true,
+    "evidence": "Server Vitest: 94 passed; server TypeScript build exit 0"
+  },
+  {
+    "id": "ui",
+    "task": "Seven bilingual responsive pages and shared denial tokens",
+    "verification": "Admin build, browser behaviors, desktop/mobile light/dark screenshots",
+    "passes": false
+  },
+  {
+    "id": "seed",
+    "task": "Bounded example seed and reproducible UI acceptance harness",
+    "verification": "pnpm seed and Playwright assertions",
+    "passes": false
+  },
+  {
+    "id": "delivery",
+    "task": "Adversarial review, documentation and full delivery checks",
+    "verification": "Install, recursive tests/build, lint, Docker, identifier scan",
+    "passes": false
+  }
+]

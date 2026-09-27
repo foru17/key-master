@@ -42,6 +42,7 @@ export const requests = sqliteTable(
     ts: integer().notNull(),
     ip: text().notNull(),
     ua: text().notNull(),
+    headers: text({ mode: "json" }).$type<Record<string, string>>().notNull().default({}),
     clientFamily: text("client_family").notNull(),
     method: text().notNull(),
     path: text().notNull(),

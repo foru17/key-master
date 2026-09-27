@@ -4,6 +4,8 @@ import { type DecisionName, decide, deniedResponse, detectClient, inCidrs } from
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { ulid } from "ulid";
+import { createAdmin } from "./admin.js";
+import { recordPending } from "./approval.js";
 import type { Config, Secrets } from "./config.js";
 import type { Store } from "./db.js";
 import { clientIp } from "./ip.js";
@@ -20,6 +22,7 @@ export type PendingRequest = {
 export type BotHandler = {
   notify: (request: PendingRequest) => Promise<void>;
   handle: (update: unknown) => Promise<void>;
+  sendLoginCode?: (code: string) => Promise<void>;
 };
 export function createApp(options: {
   store: Store;
@@ -101,6 +104,12 @@ export function createApp(options: {
         ts: started,
         ip,
         ua,
+        headers: Object.fromEntries(
+          ["accept", "accept-language", "range", "if-none-match"].flatMap((name) => {
+            const value = c.req.header(name);
+            return value ? [[name, value.slice(0, 512)]] : [];
+          }),
+        ),
         clientFamily: c.get("family"),
         method: c.req.method,
         path: c.req.path,
@@ -115,6 +124,7 @@ export function createApp(options: {
       })
       .run();
     const pending = c.get("pending");
+    if (pending && !options.bot) recordPending(store, config, pending);
     if (pending && options.bot) {
       try {
         await options.bot.notify(pending);
@@ -129,6 +139,18 @@ export function createApp(options: {
     c.set("decision", "allow_public");
     return c.json({ status: "ok" });
   });
+  app.route(
+    "/api",
+    createAdmin({
+      store,
+      config,
+      secrets,
+      clock,
+      ...(options.bot?.sendLoginCode
+        ? { sendCode: options.bot.sendLoginCode.bind(options.bot) }
+        : {}),
+    }),
+  );
   app.on(["GET", "HEAD"], ["/admin", "/admin/*"], async (c) => {
     if (!inCidrs(c.get("ip"), config.admin.allowed_cidrs)) {
       c.set("decision", "deny_unknown");
@@ -138,15 +160,18 @@ export function createApp(options: {
         now: clock(),
       });
     }
-    const path = c.req.path.replace(/^\/admin\/?/, "") || "index.html";
+    const requested = c.req.path.replace(/^\/admin\/?/, "") || "index.html";
+    const path = requested.includes(".") ? requested : "index.html";
     try {
       const body = await containedFile(adminRoot, path);
       c.set("decision", "allow_internal");
       const type = path.endsWith(".js")
         ? "application/javascript"
-        : path.endsWith(".css")
-          ? "text/css"
-          : "text/html";
+        : path.endsWith(".woff2")
+          ? "font/woff2"
+          : path.endsWith(".css")
+            ? "text/css"
+            : "text/html";
       return new Response(new Uint8Array(body), {
         headers: {
           "Content-Type": `${type}; charset=utf-8`,

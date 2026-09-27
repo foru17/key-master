@@ -19,7 +19,11 @@ export const resourceSchema = z
       .max(1024)
       .regex(/^\/[A-Za-z0-9_/-]+$/)
       .refine(
-        (s) => !s.startsWith("/admin") && s !== "/healthz" && !s.startsWith("/_telegram"),
+        (s) =>
+          !s.startsWith("/api") &&
+          !s.startsWith("/admin") &&
+          s !== "/healthz" &&
+          !s.startsWith("/_telegram"),
         "Reserved route",
       ),
     kind: z.enum(["file", "inline", "upstream"]),
