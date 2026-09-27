@@ -362,7 +362,7 @@ export function ResourceForm({ resource, onClose }: { resource?: Resource; onClo
             name="slug"
             defaultValue={resource?.slug ?? ""}
             placeholder="/example-feed"
-            pattern="/[A-Za-z0-9_/-]+"
+            pattern="\/[A-Za-z0-9._\/\-]+"
             required
           />
         </Field>

@@ -6,15 +6,18 @@ import { ulid } from "ulid";
 import { z } from "zod";
 import { resolveApproval } from "./approval.js";
 import { createLoginCode, rateLimit, redeemCode } from "./auth.js";
-import { type Config, configSchema, resourceSchema, type Secrets } from "./config.js";
+import {
+  type Config,
+  configSchema,
+  resourceSchema,
+  SCOPE_ITEM_PATTERN,
+  type Secrets,
+} from "./config.js";
 import { getState, issueToken, type Store, setState } from "./db.js";
 import * as schema from "./schema.js";
 
 const duration = z.number().int().min(1).max(31536000);
-const scope = z
-  .array(z.string().regex(/^(\*|\/[A-Za-z0-9_/-]+)$/))
-  .min(1)
-  .max(100);
+const scope = z.array(z.string().regex(SCOPE_ITEM_PATTERN)).min(1).max(100);
 const grantInput = z
   .object({
     subjectKind: z.enum(["ip", "ip_client"]),

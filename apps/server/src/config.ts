@@ -12,12 +12,16 @@ const httpUrl = z
     (value) => URL.canParse(value) && ["http:", "https:"].includes(new URL(value).protocol),
     "HTTP(S) required",
   );
+// Path-like slug: letters, digits, "_", "-", "." and "/"; no "." or ".." segments.
+export const SLUG_PATTERN = /^(?!.*\/\.{1,2}(?:\/|$))\/[A-Za-z0-9._/-]+$/;
+export const SCOPE_ITEM_PATTERN = /^(?:\*|(?!.*\/\.{1,2}(?:\/|$))\/[A-Za-z0-9._/-]+)$/;
+
 export const resourceSchema = z
   .object({
     slug: z
       .string()
       .max(1024)
-      .regex(/^\/[A-Za-z0-9_/-]+$/)
+      .regex(SLUG_PATTERN)
       .refine(
         (s) =>
           !s.startsWith("/api") &&
@@ -47,10 +51,7 @@ export const machineTokenSchema = z.strictObject({
     .string()
     .regex(/^[a-fA-F0-9]{64}$/)
     .transform((value) => value.toLowerCase()),
-  scope: z
-    .array(z.string().regex(/^(\*|\/[A-Za-z0-9_/-]+)$/))
-    .min(1)
-    .max(100),
+  scope: z.array(z.string().regex(SCOPE_ITEM_PATTERN)).min(1).max(100),
   kind: z.literal("machine"),
   expires_at: z
     .union([
