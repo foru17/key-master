@@ -43,7 +43,7 @@ config.example.yaml, .env.example, Dockerfile, docker-compose.yml, README.md (En
   created/last-matched/revoked timestamps; deleting configuration entries does not delete DB rows.
 - `requests` (append-only audit): id (ULID, also shown to the caller as request id), ts, ip, ua, client_family,
   method, path, resource_slug (nullable), decision (`allow_token` | `allow_allowlist` | `allow_grant` | `allow_internal` | `allow_public`
-  | `deny_pending` | `deny_blocked` | `deny_unknown` | `not_found`), token_id, grant_id, allowlist_id (nullable), status, bytes, latency_ms,
+  | `deny_pending` | `deny_blocked` | `deny_unknown` | `not_found` | `admin_api`), token_id, grant_id, allowlist_id (nullable), status, bytes, latency_ms,
   source (`app` | `nginx`).
 - `approvals`: id, request_id, subject, tg_message_id, action (`allow` | `deny` | `device_token` | `always`), actor, duration_s, ts.
 - `blocks`: subject, until, reason (deny suppresses notifications until `until`).
@@ -64,6 +64,14 @@ Input: resource, client ip, ua, query token, now, allowlist entries (including r
 9. otherwise → `deny_pending` (403) and notify owner (at most one notification per subject per pending window).
 
 HEAD / Range / If-None-Match must not bypass the decision: evaluate first, then serve (304 only after allow).
+
+`admin_api` is an audit-only label, outside the resource decision order. Application requests without a
+matched resource whose path starts with `/api/` use this label and retain their actual HTTP status.
+Health probes and existing audit-noise exclusions remain excluded; resource requests and nginx ingestion
+are unchanged. The admin UI displays a neutral “管理接口 / Admin API” pill and includes it in the audit filter.
+Migration `0004_admin_api.sql` extends the decision CHECK constraint and relabels historical rows where
+`resource_slug IS NULL AND path LIKE '/api/%' AND decision='not_found'`, preserving all columns, indexes,
+approval references and append-only UPDATE/DELETE triggers. Missing non-API paths remain `not_found`.
 
 ## Allowlist validation and DNS refresh
 

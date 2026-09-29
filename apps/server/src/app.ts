@@ -120,7 +120,10 @@ export function createApp(options: {
           method: c.req.method,
           path: c.req.path,
           resourceSlug: c.get("resourceSlug"),
-          decision: c.get("decision"),
+          decision:
+            c.get("resourceSlug") === null && c.req.path.startsWith("/api/")
+              ? "admin_api"
+              : c.get("decision"),
           tokenId: c.get("tokenId"),
           grantId: c.get("grantId"),
           allowlistId: c.get("allowlistId"),

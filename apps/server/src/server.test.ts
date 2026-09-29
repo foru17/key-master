@@ -157,6 +157,32 @@ describe("gateway", () => {
     expect(() => store.sqlite.exec("DELETE FROM requests")).toThrow("append-only");
     expect(() => store.sqlite.exec("UPDATE requests SET status=200")).toThrow("append-only");
   });
+  it.each([
+    ["/nope", null, "not_found", 404],
+    ["/api", null, "not_found", 404],
+    ["/api-example", null, "not_found", 404],
+    ["/api/nope", null, "admin_api", 404],
+    ["/private", "/private", "deny_pending", 403],
+    ["/public", "/public", "allow_public", 200],
+    ["/disabled", "/disabled", "not_found", 404],
+  ])(
+    "audits %s without changing resource decisions",
+    async (path, resourceSlug, decision, status) => {
+      config.admin.allowed_cidrs = ["203.0.113.0/24"];
+      const publicResource = config.resources[1];
+      if (!publicResource) throw new Error("Missing public fixture");
+      config.resources.push({ ...publicResource, slug: "/disabled", enabled: false });
+      syncResources(store, config, now);
+      const response = await get(path);
+      expect(response.status).toBe(status);
+      expect(store.db.select().from(schema.requests).get()).toMatchObject({
+        path,
+        resourceSlug,
+        decision,
+        status,
+      });
+    },
+  );
   it("sync is idempotent", () => {
     syncResources(store, config, now + 10);
     expect(store.db.select().from(schema.resources).all()).toHaveLength(2);
@@ -308,6 +334,22 @@ describe("nginx ingestion", () => {
       expect(store.db.select().from(schema.requests).all()).toHaveLength(0);
     },
   );
+  it.each([
+    [200, "allow_token"],
+    [404, "not_found"],
+    [403, "deny_unknown"],
+  ])("keeps nginx API decision semantics for status %s", (status, decision) => {
+    expect(
+      ingestLine(store, JSON.stringify({ ...JSON.parse(entry), uri: "/api/example", status })),
+    ).toBe(true);
+    expect(store.db.select().from(schema.requests).get()).toMatchObject({
+      path: "/api/example",
+      resourceSlug: "/api/example",
+      source: "nginx",
+      status,
+      decision,
+    });
+  });
   it("redacts query, imports source and skips invalid/proxied rows", () => {
     expect(ingestLine(store, entry)).toBe(true);
     expect(ingestLine(store, "invalid")).toBe(false);

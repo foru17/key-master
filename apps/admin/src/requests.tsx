@@ -39,6 +39,7 @@ const decisions = [
   "deny_blocked",
   "deny_unknown",
   "not_found",
+  "admin_api",
 ];
 const families = [
   "clash-verge",

@@ -187,9 +187,13 @@ See [docs/nginx.md](docs/nginx.md) for an example of nginx serving explicitly ma
 
 Forwarded IP headers are ignored unless the socket peer belongs to `trusted_proxies`. Trusted chains are walked right-to-left to the first untrusted hop. Configure only your actual proxy addresses, not arbitrary client networks.
 
-Every application response, including health/admin/error responses, has a ULID request ID and an audit row. Paths omit query strings to avoid persisting `?k=`. The nginx tailer imports only `km_source: direct` records; app-proxied requests are already audited. It persists inode/offset cursors, waits for complete lines, handles rotation/truncation, and processes at most 1 MiB/2,000 lines per tick. Invalid records are skipped. SQLite triggers reject updates and deletes of `requests`.
+Every application response has a ULID request ID. Audit rows exclude health probes, admin static reads and admin API read polling. Unmatched `/api/` requests are labeled `admin_api` (管理接口 / Admin API, neutral pill and audit filter), retaining the actual response status; unmatched non-API paths remain `not_found`. Resource decisions are `allow_token`, `allow_allowlist`, `allow_grant`, `allow_internal`, `allow_public`, `deny_pending`, `deny_blocked`, `deny_unknown` and `not_found`; `admin_api` does not participate in resource authorization. Paths omit query strings to avoid persisting `?k=`. The nginx tailer imports only `km_source: direct` records; app-proxied requests are already audited. It persists inode/offset cursors, waits for complete lines, handles rotation/truncation, and processes at most 1 MiB/2,000 lines per tick. Invalid records are skipped. SQLite triggers reject updates and deletes of `requests`.
 
 ## Design notes
+
+- Migration `0004_admin_api.sql` rebuilds requests and preserves all columns, indexes, approval references
+  and append-only triggers. Only historical rows matching `resource_slug IS NULL AND path LIKE '/api/%'
+  AND decision='not_found'` become `admin_api`. nginx ingestion and resource-only Overview statistics are unchanged.
 
 - YAML cannot make `allowlist` both a sequence and a mapping. The array form is shorthand for
   `{entries: [...], resolve_interval_s: 300}`; use the mapping form for a custom interval. DDNS failures keep

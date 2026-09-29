@@ -68,6 +68,31 @@ beforeEach(async () => {
 });
 afterEach(() => store.sqlite.close());
 it.each([
+  ["auth/request-code", {}, false, 200],
+  ["auth/verify", { code: "invalid" }, false, 400],
+  ["admin/grants", {}, false, 401],
+  ["admin/grants", {}, true, 400],
+] as const)("audits POST /api/%s as admin_api", async (path, body, authenticated, status) => {
+  const before = await (await req("admin/overview")).json();
+  const response = await req(path, "POST", body, authenticated);
+  expect(response.status).toBe(status);
+  expect(
+    store.db
+      .select()
+      .from(schema.requests)
+      .where(eq(schema.requests.id, response.headers.get("x-request-id") ?? ""))
+      .get(),
+  ).toMatchObject({ path: `/api/${path}`, resourceSlug: null, decision: "admin_api", status });
+  const audit = await (await req("admin/requests?decision=admin_api")).json();
+  expect(audit.total).toBe(2);
+  expect(audit.items).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ path: "/api/auth/verify", decision: "admin_api", status: 200 }),
+    ]),
+  );
+  expect(await (await req("admin/overview")).json()).toEqual(before);
+});
+it.each([
   "overview",
   "requests",
   "requests/missing",

@@ -111,6 +111,7 @@ export type Grant = {
 };
 export type Block = { subject: string; until: number };
 export type DecisionName =
+  | "admin_api"
   | "not_found"
   | "allow_public"
   | "allow_token"
@@ -121,7 +122,7 @@ export type DecisionName =
   | "deny_blocked"
   | "deny_pending";
 export type Decision = {
-  decision: DecisionName;
+  decision: Exclude<DecisionName, "admin_api">;
   allowed: boolean;
   status: 200 | 403 | 404;
   notify: boolean;
@@ -150,7 +151,7 @@ export const covers = (scope: string[], slug: string): boolean =>
   scope.includes("*") || scope.includes(slug);
 export function decide(input: DecisionInput): Decision {
   const { resource, ip, now } = input;
-  const result = (decision: DecisionName): Decision => ({
+  const result = (decision: Decision["decision"]): Decision => ({
     decision,
     allowed: decision.startsWith("allow_"),
     status: decision === "not_found" ? 404 : decision.startsWith("allow_") ? 200 : 403,

@@ -1,0 +1,22 @@
+[
+  {
+    "id": "admin-api-audit",
+    "task": "Add the audit-only admin_api decision, migrate historical API rows, and update admin labels and documentation without changing resource authorization or nginx ingestion.",
+    "verification": [
+      "Table-driven audit, resource authorization, nginx ingestion and historical migration tests, including append-only UPDATE/DELETE rejection",
+      "pnpm -r test && pnpm -r build && pnpm lint",
+      "Requests page baseline comparison, desktop/mobile/dark screenshots, bilingual neutral pills and real decision filtering"
+    ],
+    "passes": true,
+    "evidence": {
+      "command": "pnpm -r test && pnpm -r build && pnpm lint",
+      "result": "Exit 0: core 279 tests, server 273 tests, admin typecheck, all workspace builds and lint passed. Biome reports one existing configuration deprecation info.",
+      "log": ".verification/admin-api-validation.log",
+      "migration": "12 historical migration cases passed, preserving all columns, indexes, triggers and approval references; UPDATE/DELETE rejected. An actual pre-change preview database also migrated both login rows to admin_api while retaining status 200.",
+      "ui": "VERDICT: PASS. Real filter selection returned only admin_api rows; English Admin API and Chinese 管理接口 pills both use neutral. not_found still filters the non-API 404. No horizontal overflow at 1440x900 or 390x844; dark pill contrast 6.93:1.",
+      "baseline": "475daf1; .ui-acceptance/2026-09-29/admin-api/baseline/requests-{desktop,mobile,dark}.png. Existing layout, navigation and filters preserved; only the decision label and filter option change.",
+      "screenshots": ".ui-acceptance/2026-09-29/admin-api/requests-{desktop,mobile,dark,dark-explicit}.png",
+      "scope": "Migrations 0000-0003, nginx ingestion and Overview implementation are unchanged. Added values use reserved example addresses and synthetic test identifiers."
+    }
+  }
+]

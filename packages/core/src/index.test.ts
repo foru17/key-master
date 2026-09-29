@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   clientFamilies,
   type DecisionInput,
+  type DecisionName,
   decide,
   deniedResponse,
   detectClient,
@@ -76,8 +77,18 @@ describe("client detection", () => {
   );
 });
 describe("decision order and HTTP preconditions", () => {
-  const cases: [string, Partial<DecisionInput>, string][] = [
+  const cases: [string, Partial<DecisionInput>, Exclude<DecisionName, "admin_api">][] = [
     ["missing", { resource: null }, "not_found"],
+    [
+      "API resource remains public",
+      { resource: { slug: "/api/example", enabled: true, policy: "public" } },
+      "allow_public",
+    ],
+    [
+      "disabled API resource remains missing",
+      { resource: { slug: "/api/example", enabled: false, policy: "public" } },
+      "not_found",
+    ],
     [
       "disabled public",
       { resource: { slug: "/private", enabled: false, policy: "public" } },

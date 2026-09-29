@@ -72,6 +72,7 @@ export const requests = sqliteTable(
         "deny_blocked",
         "deny_unknown",
         "not_found",
+        "admin_api",
       ],
     }).notNull(),
     tokenId: text("token_id"),
