@@ -2,6 +2,17 @@
 
 A self-hosted resource gateway with machine/device tokens, temporary Telegram approvals, persistent network allowlists, and an append-only SQLite audit trail. No telemetry or paid services.
 
+<p align="center">
+  <img src="docs/screenshots/overview-1440-light.png" alt="key-master overview: request activity, pending approvals, top clients and IPs" width="860">
+</p>
+
+Unauthorized callers get a clear, client-aware notice instead of a config body, while you approve or deny from Telegram:
+
+<p align="center">
+  <img src="docs/screenshots/denied-1440-light.png" alt="Denied notice page shown to a browser" width="420">
+  <img src="docs/screenshots/approvals-390-dark.png" alt="Approvals on a phone, dark theme" width="200">
+</p>
+
 ## Architecture
 
 ```text
